@@ -10,13 +10,17 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, password } = await request.json()
+    const { userId, password, tosAgreed, tosVersion } = await request.json()
 
     if (!ID_PATTERN.test(userId)) {
       return NextResponse.json({ error: "IDは英数字8桁で入力してください" }, { status: 400 })
     }
     if (!PW_PATTERN.test(password)) {
       return NextResponse.json({ error: "パスワードは英数字8桁で入力してください" }, { status: 400 })
+    }
+    // 利用規約への同意チェック（サーバー側でも再確認）
+    if (tosAgreed !== true) {
+      return NextResponse.json({ error: "利用規約への同意が必要です" }, { status: 400 })
     }
 
     // 既存ID重複チェック
@@ -31,9 +35,15 @@ export async function POST(request: NextRequest) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
+    const tosVersionNumber = typeof tosVersion === "number" && tosVersion > 0 ? tosVersion : 1
     const { data, error } = await supabase
       .from("users")
-      .insert({ user_id: userId, password_hash: passwordHash })
+      .insert({
+        user_id: userId,
+        password_hash: passwordHash,
+        tos_agreed_at: new Date().toISOString(),
+        tos_version: tosVersionNumber,
+      })
       .select("id, user_id")
       .single()
 

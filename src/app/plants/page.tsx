@@ -22,7 +22,6 @@ export default function PlantsPage() {
       const { data: plantData } = await supabase
         .from("plants")
         .select("*")
-        .eq("is_planted", true)
         .order("area")
         .order("name")
 

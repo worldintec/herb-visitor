@@ -4,6 +4,7 @@ import { Suspense, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { UserPlus, ArrowLeft } from "lucide-react"
+import { TERMS_TEXT, TERMS_VERSION } from "@/lib/terms"
 
 export default function RegisterPage() {
   return (
@@ -20,6 +21,7 @@ function RegisterPageInner() {
   const [userId, setUserId] = useState("")
   const [password, setPassword] = useState("")
   const [passwordConfirm, setPasswordConfirm] = useState("")
+  const [tosAgreed, setTosAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,12 +33,16 @@ function RegisterPageInner() {
     e.preventDefault()
     setError(null)
     if (!idValid || !pwValid || !matchValid) return
+    if (!tosAgreed) {
+      setError("利用規約への同意が必要です")
+      return
+    }
     setSubmitting(true)
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ userId, password, tosAgreed: true, tosVersion: TERMS_VERSION }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -126,6 +132,27 @@ function RegisterPageInner() {
             )}
           </div>
 
+          {/* 利用規約 */}
+          <div>
+            <label className="block text-xs font-medium text-herb-text-secondary mb-1">
+              利用規約
+            </label>
+            <div className="max-h-48 overflow-y-auto border border-herb-border rounded-lg p-3 text-xs text-herb-text leading-relaxed whitespace-pre-wrap bg-green-50/30">
+              {TERMS_TEXT}
+            </div>
+            <label className="flex items-start gap-2 mt-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={tosAgreed}
+                onChange={(e) => setTosAgreed(e.target.checked)}
+                className="mt-0.5 size-4 accent-herb-primary"
+              />
+              <span className="text-xs text-herb-text">
+                上記の利用規約を読み、内容に同意します。
+              </span>
+            </label>
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-sm">
               {error}
@@ -134,7 +161,7 @@ function RegisterPageInner() {
 
           <button
             type="submit"
-            disabled={submitting || !idValid || !pwValid || !matchValid}
+            disabled={submitting || !idValid || !pwValid || !matchValid || !tosAgreed}
             className="w-full h-11 rounded-full bg-herb-primary text-white font-semibold text-sm disabled:opacity-50"
           >
             {submitting ? "登録中..." : "登録する"}

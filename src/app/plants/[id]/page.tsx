@@ -16,10 +16,18 @@ import {
   ChevronLeft,
   ChevronRight,
   MapPin,
+  MessageCircle,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { sortPhotosByPriority } from "@/lib/photo-utils"
+
+interface PlantNote {
+  id: string
+  content: string
+  author: string | null
+  created_at: string
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
@@ -36,6 +44,7 @@ export default function PlantDetailPage({
   const router = useRouter()
   const [plant, setPlant] = useState<Plant | null>(null)
   const [photos, setPhotos] = useState<PlantPhoto[]>([])
+  const [notes, setNotes] = useState<PlantNote[]>([])
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [loading, setLoading] = useState(true)
 
@@ -50,15 +59,24 @@ export default function PlantDetailPage({
       if (plantData) {
         setPlant(plantData)
 
-        const { data: photoData } = await supabase
-          .from("plant_photos")
-          .select("*")
-          .eq("plant_name", plantData.name)
-          .order("uploaded_at", { ascending: false })
+        const [photoRes, noteRes] = await Promise.all([
+          supabase
+            .from("plant_photos")
+            .select("*")
+            .eq("plant_name", plantData.name)
+            .order("uploaded_at", { ascending: false }),
+          // インプット記録の観察ノートを取得（content と作成日のみ）
+          supabase
+            .from("plant_notes")
+            .select("id, content, author, created_at")
+            .eq("plant_name", plantData.name)
+            .not("content", "is", null)
+            .neq("content", "")
+            .order("created_at", { ascending: false }),
+        ])
 
-        if (photoData) {
-          setPhotos(sortPhotosByPriority(photoData))
-        }
+        if (photoRes.data) setPhotos(sortPhotosByPriority(photoRes.data))
+        if (noteRes.data) setNotes(noteRes.data as PlantNote[])
       }
       setLoading(false)
     }
@@ -285,6 +303,38 @@ export default function PlantDetailPage({
             )
           })}
         </div>
+
+        {/* 観察ノート（ハーブ園スタッフからの一言） */}
+        {notes.length > 0 && (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <MessageCircle size={16} className="text-emerald-500" />
+              </div>
+              <h3 className="font-semibold text-sm">観察ノート</h3>
+              <span className="text-xs text-herb-text-secondary">（{notes.length}件）</span>
+            </div>
+            <div className="space-y-2">
+              {notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="bg-white rounded-2xl p-4 shadow-sm border-l-4 border-emerald-300"
+                >
+                  <p className="text-sm text-herb-text leading-relaxed whitespace-pre-wrap">
+                    {note.content}
+                  </p>
+                  <p className="text-xs text-herb-text-secondary mt-2">
+                    {new Date(note.created_at).toLocaleDateString("ja-JP", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Note button */}
         <div className="mt-6 mb-4">

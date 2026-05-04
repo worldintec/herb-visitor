@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import VisitorNav from "@/components/visitor-nav"
+import AutoLogoutProvider from "@/components/auto-logout-provider"
 
 export const metadata: Metadata = {
   title: "見沼氷川公園 ハーブ園ガイド",
@@ -37,6 +38,7 @@ export default function RootLayout({
           {children}
         </div>
         <VisitorNav />
+        <AutoLogoutProvider />
       </body>
     </html>
   )

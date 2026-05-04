@@ -29,7 +29,6 @@ export default function AreaDetailPage({
           .from("plants")
           .select("*")
           .eq("area", areaId)
-          .eq("is_planted", true)
           .order("plant_no"),
         supabase.from("plant_positions").select("*").eq("area", areaId),
       ])

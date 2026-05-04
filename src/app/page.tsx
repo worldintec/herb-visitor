@@ -52,10 +52,11 @@ export default function HomePage() {
 
   useEffect(() => {
     async function fetchData() {
+      // 植栽マスタを直接カウント（is_planted フィルターは外す）
+      // 来園者向けには「植えられているか」=「マスタに登録されているか」で判定
       const { data: plantData } = await supabase
         .from("plants")
         .select("*")
-        .eq("is_planted", true)
         .order("created_at", { ascending: false })
 
       if (plantData) {

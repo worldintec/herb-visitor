@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import {
   BookOpen,
   Plus,
@@ -10,6 +11,7 @@ import {
   Trash2,
   Calendar,
   Leaf,
+  LogOut,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getSessionId } from "@/lib/session"
@@ -22,9 +24,26 @@ function getNotePhotoUrl(path: string) {
 }
 
 export default function MyNotesPage() {
+  const router = useRouter()
   const [notes, setNotes] = useState<VisitorNote[]>([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function handleLogout() {
+    if (!confirm("ログアウトしますか？")) return
+    setLoggingOut(true)
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST" })
+      if (!res.ok) throw new Error("logout failed")
+      // localStorage の自動ログアウトキーもクリア
+      try { localStorage.removeItem("lastActivityAt") } catch {}
+      router.replace("/login")
+    } catch {
+      alert("ログアウトに失敗しました。時間を置いてお試しください。")
+      setLoggingOut(false)
+    }
+  }
 
   useEffect(() => {
     fetchNotes()
@@ -77,13 +96,24 @@ export default function MyNotesPage() {
             <BookOpen size={20} className="text-herb-primary" />
             <h1 className="text-xl font-bold">マイノート</h1>
           </div>
-          <Link
-            href="/my-notes/new"
-            className="flex items-center gap-1.5 bg-herb-primary text-white rounded-xl px-4 h-10 text-sm font-semibold shadow-md active:scale-[0.98] transition-transform"
-          >
-            <Plus size={16} />
-            新規作成
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/my-notes/new"
+              className="flex items-center gap-1.5 bg-herb-primary text-white rounded-xl px-4 h-10 text-sm font-semibold shadow-md active:scale-[0.98] transition-transform"
+            >
+              <Plus size={16} />
+              新規作成
+            </Link>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex items-center gap-1 bg-white text-herb-text-secondary border border-herb-border rounded-xl px-3 h-10 text-xs font-medium hover:bg-rose-50 hover:text-rose-500 hover:border-rose-200 transition-colors disabled:opacity-50"
+              aria-label="ログアウト"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">{loggingOut ? "..." : "ログアウト"}</span>
+            </button>
+          </div>
         </div>
         <p className="text-xs text-herb-text-secondary mt-2">
           訪問時のメモや観察記録を残せます

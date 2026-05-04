@@ -86,7 +86,6 @@ export default function AreasPage() {
       const { data } = await supabase
         .from("plants")
         .select("*")
-        .eq("is_planted", true)
 
       if (data) setPlants(data)
       setLoading(false)
