@@ -2,52 +2,12 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { MapPin, Leaf, ChevronRight, Map } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Plant } from "@/types/database"
+import HerbGardenMap from "@/components/herb-garden-map"
 
 const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
-
-// 平面図に基づくSVGレイアウト座標（viewBox: 0 0 800 600）
-// 5列×5行のグリッド構成、A〜Wを園内の概略配置で展開
-type AreaShape = {
-  id: string
-  x: number
-  y: number
-  w: number
-  h: number
-}
-const AREA_LAYOUT: AreaShape[] = [
-  // 北端: A B C D E
-  { id: "A", x: 30, y: 30, w: 140, h: 90 },
-  { id: "B", x: 180, y: 30, w: 140, h: 90 },
-  { id: "C", x: 330, y: 30, w: 140, h: 90 },
-  { id: "D", x: 480, y: 30, w: 140, h: 90 },
-  { id: "E", x: 630, y: 30, w: 140, h: 90 },
-  // 北中: F G H I J
-  { id: "F", x: 30, y: 130, w: 140, h: 90 },
-  { id: "G", x: 180, y: 130, w: 140, h: 90 },
-  { id: "H", x: 330, y: 130, w: 140, h: 90 },
-  { id: "I", x: 480, y: 130, w: 140, h: 90 },
-  { id: "J", x: 630, y: 130, w: 140, h: 90 },
-  // 中央: K L M N O
-  { id: "K", x: 30, y: 230, w: 140, h: 90 },
-  { id: "L", x: 180, y: 230, w: 140, h: 90 },
-  { id: "M", x: 330, y: 230, w: 140, h: 90 },
-  { id: "N", x: 480, y: 230, w: 140, h: 90 },
-  { id: "O", x: 630, y: 230, w: 140, h: 90 },
-  // 南中: P Q R S T
-  { id: "P", x: 30, y: 330, w: 140, h: 90 },
-  { id: "Q", x: 180, y: 330, w: 140, h: 90 },
-  { id: "R", x: 330, y: 330, w: 140, h: 90 },
-  { id: "S", x: 480, y: 330, w: 140, h: 90 },
-  { id: "T", x: 630, y: 330, w: 140, h: 90 },
-  // 南端: U V W
-  { id: "U", x: 105, y: 430, w: 200, h: 130 },
-  { id: "V", x: 320, y: 430, w: 200, h: 130 },
-  { id: "W", x: 535, y: 430, w: 160, h: 130 },
-]
 
 const AREA_NAMES: Record<string, string> = {
   A: "エリアA",
@@ -76,7 +36,6 @@ const AREA_NAMES: Record<string, string> = {
 }
 
 export default function AreasPage() {
-  const router = useRouter()
   const [plants, setPlants] = useState<Plant[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<"map" | "list">("map")
@@ -147,71 +106,11 @@ export default function AreasPage() {
         </div>
       </div>
 
-      {/* SVGグラフィカルマップ */}
+      {/* SVGグラフィカルマップ（3ブロック構成） */}
       {view === "map" && !loading && (
         <div className="px-4 pt-4">
-          <div className="bg-white rounded-2xl p-3 shadow-sm">
-            <svg
-              viewBox="0 0 800 600"
-              className="w-full h-auto"
-              aria-label="ハーブ園エリアマップ"
-            >
-              {/* 園全体の外枠 */}
-              <rect
-                x="10"
-                y="10"
-                width="780"
-                height="580"
-                rx="12"
-                fill="oklch(0.97 0.02 145)"
-                stroke="oklch(0.58 0.18 148)"
-                strokeWidth="2"
-              />
-              {/* 各エリア */}
-              {AREA_LAYOUT.map((area) => {
-                const count = areaCounts[area.id] || 0
-                return (
-                  <g
-                    key={area.id}
-                    onClick={() => router.push(`/areas/${area.id}`)}
-                    className="cursor-pointer group"
-                  >
-                    <rect
-                      x={area.x}
-                      y={area.y}
-                      width={area.w}
-                      height={area.h}
-                      rx="6"
-                      fill="oklch(0.88 0.08 148)"
-                      stroke="oklch(0.58 0.18 148)"
-                      strokeWidth="1.5"
-                      className="transition-colors group-hover:fill-[oklch(0.78_0.13_148)] group-active:fill-[oklch(0.7_0.16_148)]"
-                    />
-                    <text
-                      x={area.x + area.w / 2}
-                      y={area.y + area.h / 2 - 6}
-                      textAnchor="middle"
-                      fontSize="22"
-                      fontWeight="bold"
-                      fill="oklch(0.32 0.04 145)"
-                      className="pointer-events-none select-none"
-                    >
-                      {area.id}
-                    </text>
-                    <text
-                      x={area.x + area.w / 2}
-                      y={area.y + area.h / 2 + 14}
-                      textAnchor="middle"
-                      fontSize="11"
-                      fill="oklch(0.45 0.04 145)"
-                      className="pointer-events-none select-none"
-                    >
-                      {count}種
-                    </text>
-                  </g>
-                )
-              })}
-            </svg>
+          <div className="bg-white rounded-2xl p-3 shadow-sm overflow-x-auto">
+            <HerbGardenMap areaCounts={areaCounts} />
             <p className="text-xs text-herb-text-secondary text-center mt-2">
               エリアをタップすると詳細を表示します
             </p>
