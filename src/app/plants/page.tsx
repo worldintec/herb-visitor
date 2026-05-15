@@ -64,8 +64,18 @@ export default function PlantsPage() {
     [plants]
   )
 
-  const filteredPlants = useMemo(() => {
+  // 同一ハーブ名の重複を排除（複数エリアに存在する場合は最初の1件のみ）
+  const uniquePlants = useMemo(() => {
+    const seen = new Set<string>()
     return plants.filter((p) => {
+      if (seen.has(p.name)) return false
+      seen.add(p.name)
+      return true
+    })
+  }, [plants])
+
+  const filteredPlants = useMemo(() => {
+    return uniquePlants.filter((p) => {
       if (selectedArea && p.area !== selectedArea) return false
       if (selectedCategory && p.category !== selectedCategory) return false
       if (searchQuery) {
@@ -79,7 +89,7 @@ export default function PlantsPage() {
       }
       return true
     })
-  }, [plants, selectedArea, selectedCategory, searchQuery])
+  }, [uniquePlants, selectedArea, selectedCategory, searchQuery])
 
   const activeFilterCount =
     (selectedArea ? 1 : 0) + (selectedCategory ? 1 : 0)
