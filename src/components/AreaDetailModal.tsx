@@ -171,7 +171,7 @@ export function AreaDetailModal({
                 {plants.map((plant, idx) => (
                   <Link
                     key={plant.id}
-                    href={`/areas/${areaId}`}
+                    href={`/plants/${plant.id}`}
                     onClick={onClose}
                     className="w-full flex items-start gap-2 px-2 py-2 rounded-lg hover:bg-green-50 active:bg-green-100 transition-colors min-h-[44px]"
                   >
