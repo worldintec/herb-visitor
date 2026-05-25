@@ -5,9 +5,10 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Leaf, MapPin } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import type { Plant, PlantPosition, PlantPhoto } from "@/types/database"
+import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
+import { EXCEL_PLANTS } from "@/data/excel-plants"
 
 export default function AreaDetailPage({
   params,
@@ -17,20 +18,21 @@ export default function AreaDetailPage({
   const { id: areaId } = use(params)
   const router = useRouter()
   const [plants, setPlants] = useState<Plant[]>([])
-  const [positions, setPositions] = useState<PlantPosition[]>([])
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
   const [selectedPlant, setSelectedPlant] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // EXCEL_PLANTSからこのエリアの植物位置を取得
+  const excelPositions = EXCEL_PLANTS.filter((p) => p.area === areaId)
+
   useEffect(() => {
     async function fetchData() {
-      const [plantsRes, positionsRes] = await Promise.all([
+      const [plantsRes] = await Promise.all([
         supabase
           .from("plants")
           .select("*")
           .eq("area", areaId)
           .order("plant_no"),
-        supabase.from("plant_positions").select("*").eq("area", areaId),
       ])
 
       if (plantsRes.data) {
@@ -59,7 +61,6 @@ export default function AreaDetailPage({
         }
       }
 
-      if (positionsRes.data) setPositions(positionsRes.data)
       setLoading(false)
     }
     fetchData()
@@ -114,120 +115,102 @@ export default function AreaDetailPage({
         </div>
       ) : (
         <>
-          {/* SVG Map */}
-          {positions.length > 0 && (
-            <div className="px-4 pt-4">
-              <h2 className="text-sm font-bold mb-2 flex items-center gap-1.5">
-                <MapPin size={14} className="text-herb-primary" />
-                配置マップ
-              </h2>
-              <div className="bg-white rounded-2xl p-3 shadow-sm overflow-hidden">
-                <svg
-                  viewBox="0 0 100 100"
-                  className="w-full"
-                  style={{ maxHeight: "300px" }}
-                >
-                  {/* Background grid */}
-                  <rect
-                    x="0"
-                    y="0"
-                    width="100"
-                    height="100"
-                    fill="oklch(0.97 0.02 145)"
-                    rx="4"
-                  />
-                  {/* Grid lines */}
-                  {[20, 40, 60, 80].map((v) => (
-                    <g key={v}>
-                      <line
-                        x1={v}
-                        y1="0"
-                        x2={v}
-                        y2="100"
-                        stroke="oklch(0.92 0.02 145)"
-                        strokeWidth="0.3"
-                      />
-                      <line
-                        x1="0"
-                        y1={v}
-                        x2="100"
-                        y2={v}
-                        stroke="oklch(0.92 0.02 145)"
-                        strokeWidth="0.3"
-                      />
-                    </g>
-                  ))}
-
-                  {/* Plant positions */}
-                  {positions.map((pos) => {
-                    const isSelected = selectedPlant === pos.name
-                    return (
-                      <g
-                        key={`${pos.name}-${pos.x}-${pos.y}`}
-                        onClick={() =>
-                          setSelectedPlant(
-                            isSelected ? null : pos.name
-                          )
-                        }
-                        className="cursor-pointer"
+          {/* SVG配置マップ（EXCEL_PLANTSデータ使用・自動スケーリング） */}
+          {excelPositions.length > 0 && (() => {
+            const PAD = 16
+            const W = 320
+            const H = 200
+            const xs = excelPositions.map((p) => p.x)
+            const ys = excelPositions.map((p) => p.y)
+            const minX = Math.min(...xs)
+            const maxX = Math.max(...xs)
+            const minY = Math.min(...ys)
+            const maxY = Math.max(...ys)
+            const rangeX = maxX - minX || 40
+            const rangeY = maxY - minY || 40
+            const scaleX = (W - PAD * 2) / rangeX
+            const scaleY = (H - PAD * 2) / rangeY
+            const scale = Math.min(scaleX, scaleY)
+            const toSvg = (ex: number, ey: number) => ({
+              x: PAD + (ex - minX) * scale,
+              y: PAD + (ey - minY) * scale,
+            })
+            return (
+              <div className="px-4 pt-4">
+                <h2 className="text-sm font-bold mb-2 flex items-center gap-1.5">
+                  <MapPin size={14} className="text-herb-primary" />
+                  配置マップ
+                </h2>
+                <div className="bg-white rounded-2xl p-3 shadow-sm overflow-hidden">
+                  <svg
+                    viewBox={`0 0 ${W} ${H}`}
+                    className="w-full"
+                    style={{ maxHeight: "260px" }}
+                    aria-label={`エリア${areaId} 植物配置図`}
+                  >
+                    <rect width={W} height={H} fill="rgba(29,158,117,0.05)" rx="6" />
+                    {excelPositions.map((pos) => {
+                      const { x, y } = toSvg(pos.x, pos.y)
+                      const isSelected = selectedPlant === pos.name
+                      return (
+                        <g
+                          key={pos.id}
+                          onClick={() => setSelectedPlant(isSelected ? null : pos.name)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <title>{pos.name}</title>
+                          {isSelected && (
+                            <circle cx={x} cy={y} r={14} fill="#1D9E75" fillOpacity={0.15} />
+                          )}
+                          <circle
+                            cx={x} cy={y}
+                            r={isSelected ? 8 : 6}
+                            fill={isSelected ? "#1D9E75" : "#34C896"}
+                            stroke="white"
+                            strokeWidth={1.5}
+                          />
+                          {isSelected && (
+                            <>
+                              <rect
+                                x={x - 28} y={y - 18}
+                                width="56" height="12"
+                                rx="3"
+                                fill="rgba(15,60,40,0.85)"
+                              />
+                              <text
+                                x={x} y={y - 9}
+                                textAnchor="middle"
+                                fontSize={8}
+                                fill="white"
+                                fontWeight="600"
+                                className="pointer-events-none select-none"
+                              >
+                                {pos.name.length > 8 ? pos.name.slice(0, 7) + "…" : pos.name}
+                              </text>
+                            </>
+                          )}
+                        </g>
+                      )
+                    })}
+                  </svg>
+                  {selectedPlant && (
+                    <div className="mt-2 pt-2 border-t border-herb-border">
+                      <Link
+                        href={`/plants/${getPlantId(selectedPlant) || ""}`}
+                        className="flex items-center justify-between p-2 rounded-xl bg-green-50 text-sm"
                       >
-                        <circle
-                          cx={pos.x}
-                          cy={pos.y}
-                          r={isSelected ? 4 : 3}
-                          fill={
-                            isSelected
-                              ? "oklch(0.58 0.18 148)"
-                              : "oklch(0.72 0.14 148)"
-                          }
-                          stroke="white"
-                          strokeWidth="0.8"
-                        />
-                        {isSelected && (
-                          <>
-                            <rect
-                              x={pos.x - 18}
-                              y={pos.y - 10}
-                              width="36"
-                              height="7"
-                              rx="1.5"
-                              fill="oklch(0.22 0.04 145)"
-                              opacity="0.9"
-                            />
-                            <text
-                              x={pos.x}
-                              y={pos.y - 5}
-                              textAnchor="middle"
-                              fontSize="3.5"
-                              fill="white"
-                              fontWeight="600"
-                            >
-                              {pos.name.length > 10
-                                ? pos.name.slice(0, 10) + "..."
-                                : pos.name}
-                            </text>
-                          </>
-                        )}
-                      </g>
-                    )
-                  })}
-                </svg>
-                {selectedPlant && (
-                  <div className="mt-2 pt-2 border-t border-herb-border">
-                    <Link
-                      href={`/plants/${getPlantId(selectedPlant) || ""}`}
-                      className="flex items-center justify-between p-2 rounded-xl bg-green-50 text-sm"
-                    >
-                      <span className="font-medium">{selectedPlant}</span>
-                      <span className="text-herb-primary text-xs">
-                        詳細を見る →
-                      </span>
-                    </Link>
-                  </div>
-                )}
+                        <span className="font-medium">{selectedPlant}</span>
+                        <span className="text-herb-primary text-xs">詳細を見る →</span>
+                      </Link>
+                    </div>
+                  )}
+                  <p className="text-center text-xs text-herb-text-secondary mt-1.5">
+                    タップで植物名を表示
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Plant list */}
           <div className="px-4 pt-4 pb-6">
