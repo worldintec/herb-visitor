@@ -1,3 +1,14 @@
+export interface MapPlot {
+  id: string
+  zone: string
+  name: string
+  type: 'herb' | 'flower' | 'vegetable' | 'tree' | 'other'
+  note: string | null
+  x: number
+  y: number
+  created_at: string
+}
+
 export interface Plant {
   id: number
   name: string

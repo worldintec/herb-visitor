@@ -5,7 +5,7 @@ import Link from "next/link"
 import { MapPin, Leaf, ChevronRight, Map } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import type { Plant } from "@/types/database"
-import HerbGardenMap from "@/components/herb-garden-map"
+import HerbGardenFloorMap from "@/components/herb-garden-floor-map"
 
 const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
 
@@ -107,10 +107,10 @@ export default function AreasPage() {
       </div>
 
       {/* SVGグラフィカルマップ（3ブロック構成） */}
-      {view === "map" && !loading && (
+      {view === "map" && (
         <div className="px-4 pt-4">
           <div className="bg-white rounded-2xl p-3 shadow-sm overflow-x-auto">
-            <HerbGardenMap areaCounts={areaCounts} />
+            <HerbGardenFloorMap />
             <p className="text-xs text-herb-text-secondary text-center mt-2">
               エリアをタップすると詳細を表示します
             </p>
