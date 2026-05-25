@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
+import { AreaDetailModal } from "@/components/AreaDetailModal"
 
 // ─── ゾーン定義 ────────────────────────────────────────────────────────────────
 
@@ -235,11 +235,11 @@ const TYPE_LABELS: Record<string, string> = {
 // ─── コンポーネント ─────────────────────────────────────────────────────────────
 
 export default function HerbGardenFloorMap() {
-  const router = useRouter()
   const [plots, setPlots] = useState<MapPlot[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredZone, setHoveredZone] = useState<Zone | null>(null)
   const [hoveredPlot, setHoveredPlot] = useState<string | null>(null)
+  const [selectedArea, setSelectedArea] = useState<Zone | null>(null)
   const [zoneOffsets, setZoneOffsets] = useState<Record<Zone, { dx: number; dy: number }>>(
     () => Object.fromEntries(ZONES.map(z => [z, { dx: 0, dy: 0 }])) as Record<Zone, { dx: number; dy: number }>
   )
@@ -362,7 +362,7 @@ export default function HerbGardenFloorMap() {
                   style={{ cursor: "pointer" }}
                   onMouseEnter={() => setHoveredZone(zone)}
                   onMouseLeave={() => setHoveredZone(null)}
-                  onClick={() => router.push(`/areas/${zone}`)}
+                  onClick={() => setSelectedArea(zone)}
                 />
                 {/* ゾーンラベル */}
                 <text
@@ -474,6 +474,21 @@ export default function HerbGardenFloorMap() {
           プロットはまだ登録されていません
         </p>
       )}
+
+      {/* エリア拡大図モーダル */}
+      <AreaDetailModal
+        areaId={selectedArea}
+        positions={
+          selectedArea
+            ? EXCEL_PLANTS.filter((p) => p.area === selectedArea).map((p) => ({
+                name: p.name,
+                x: p.x,
+                y: p.y,
+              }))
+            : []
+        }
+        onClose={() => setSelectedArea(null)}
+      />
     </div>
   )
 }
