@@ -240,16 +240,29 @@ export default function HerbGardenFloorMap() {
   const [loading, setLoading] = useState(true)
   const [hoveredZone, setHoveredZone] = useState<Zone | null>(null)
   const [hoveredPlot, setHoveredPlot] = useState<string | null>(null)
+  const [zoneOffsets, setZoneOffsets] = useState<Record<Zone, { dx: number; dy: number }>>(
+    () => Object.fromEntries(ZONES.map(z => [z, { dx: 0, dy: 0 }])) as Record<Zone, { dx: number; dy: number }>
+  )
 
   useEffect(() => {
-    supabase
-      .from("map_plots")
-      .select("*")
-      .order("created_at")
-      .then(({ data }) => {
-        if (data) setPlots(data as MapPlot[])
-        setLoading(false)
-      })
+    Promise.all([
+      supabase.from("map_plots").select("*").order("created_at"),
+      supabase.from("zone_offsets").select("*"),
+    ]).then(([plotsRes, offsetsRes]) => {
+      if (plotsRes.data) setPlots(plotsRes.data as MapPlot[])
+      if (offsetsRes.data && offsetsRes.data.length > 0) {
+        setZoneOffsets(prev => {
+          const next = { ...prev }
+          offsetsRes.data!.forEach((row: { zone: string; dx: number; dy: number }) => {
+            if (ZONES.includes(row.zone as Zone)) {
+              next[row.zone as Zone] = { dx: row.dx, dy: row.dy }
+            }
+          })
+          return next
+        })
+      }
+      setLoading(false)
+    })
   }, [])
 
   if (loading) {
@@ -323,12 +336,15 @@ export default function HerbGardenFloorMap() {
           {/* ゾーン（面積降順で描画） */}
           {ZONES_BY_SIZE.map((zone) => {
             const a = ZONE_AREAS[zone]
+            const off = zoneOffsets[zone]
+            const ax = a.x + off.dx
+            const ay = a.y + off.dy
             const isHovered = hoveredZone === zone
             return (
               <g key={zone}>
                 {/* ハイライト背景 */}
                 <rect
-                  x={a.x} y={a.y} width={a.w} height={a.h}
+                  x={ax} y={ay} width={a.w} height={a.h}
                   rx={3}
                   fill="#1D9E75"
                   fillOpacity={isHovered ? 0.18 : 0}
@@ -336,7 +352,7 @@ export default function HerbGardenFloorMap() {
                 />
                 {/* ゾーン枠（クリック受付） */}
                 <rect
-                  x={a.x} y={a.y} width={a.w} height={a.h}
+                  x={ax} y={ay} width={a.w} height={a.h}
                   rx={3}
                   fill="transparent"
                   stroke="#1D9E75"
@@ -350,8 +366,8 @@ export default function HerbGardenFloorMap() {
                 />
                 {/* ゾーンラベル */}
                 <text
-                  x={a.x + a.w / 2}
-                  y={a.y + Math.min(13, a.h / 2 + 4)}
+                  x={ax + a.w / 2}
+                  y={ay + Math.min(13, a.h / 2 + 4)}
                   textAnchor="middle"
                   fontSize={Math.min(11, a.w * 0.5)}
                   fontWeight={500}
@@ -368,12 +384,13 @@ export default function HerbGardenFloorMap() {
           {/* Excel植物位置ドット */}
           {EXCEL_PLANTS.map((plant) => {
             const { x: bx, y: by } = excelToSvg(plant.x, plant.y)
+            const off = zoneOffsets[plant.area as Zone]
             return (
               <g key={plant.id}>
                 <title>{plant.name}（エリア {plant.area}）</title>
                 <circle
-                  cx={bx}
-                  cy={by}
+                  cx={bx + off.dx}
+                  cy={by + off.dy}
                   r={3.5}
                   fill="#F59E0B"
                   fillOpacity={0.8}
