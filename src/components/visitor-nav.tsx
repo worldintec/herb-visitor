@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Leaf, Map, BookOpen } from "lucide-react"
+import { Home, Leaf, Map, BookOpen, Bell } from "lucide-react"
 
 const navItems = [
   { href: "/", label: "ホーム", icon: Home },
   { href: "/plants", label: "ハーブ", icon: Leaf },
   { href: "/areas", label: "マップ", icon: Map },
   { href: "/my-notes", label: "ノート", icon: BookOpen },
+  { href: "/news", label: "お知らせ", icon: Bell },
 ]
 
 export default function VisitorNav() {
