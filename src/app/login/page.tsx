@@ -1,13 +1,98 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { LogIn, ArrowLeft } from "lucide-react"
+import { LogIn } from "lucide-react"
+
+// ========== 背景スライドショー ==========
+
+interface BloomPhoto {
+  id: number
+  plant_name: string
+  url: string
+}
+
+function BackgroundSlideshow() {
+  const [photos, setPhotos] = useState<BloomPhoto[]>([])
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [nextIndex, setNextIndex] = useState<number | null>(null)
+  const [fading, setFading] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/bloom-photos")
+      .then((r) => r.json())
+      .then(({ photos: data }: { photos: BloomPhoto[] }) => {
+        if (data && data.length > 0) {
+          // シャッフルして開始
+          const shuffled = [...data].sort(() => Math.random() - 0.5)
+          setPhotos(shuffled)
+          setCurrentIndex(0)
+        }
+      })
+      .catch(() => {/* 写真取得失敗は無視 */})
+  }, [])
+
+  const advance = useCallback(() => {
+    if (photos.length < 2) return
+    const next = (currentIndex + 1) % photos.length
+    setNextIndex(next)
+    setFading(true)
+    // フェード完了後に切り替え
+    setTimeout(() => {
+      setCurrentIndex(next)
+      setNextIndex(null)
+      setFading(false)
+    }, 1000)
+  }, [photos.length, currentIndex])
+
+  useEffect(() => {
+    if (photos.length < 2) return
+    const timer = setInterval(advance, 7000)
+    return () => clearInterval(timer)
+  }, [photos.length, advance])
+
+  if (photos.length === 0) {
+    // 写真なし：グラデーション背景
+    return <div className="fixed inset-0 hero-gradient" />
+  }
+
+  const current = photos[currentIndex]
+  const next = nextIndex !== null ? photos[nextIndex] : null
+
+  return (
+    <div className="fixed inset-0 overflow-hidden">
+      {/* 現在の写真 */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={current.url}
+        src={current.url}
+        alt={current.plant_name}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      {/* 次の写真（フェードイン） */}
+      {next && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={next.url}
+          src={next.url}
+          alt={next.plant_name}
+          className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
+          style={{ opacity: fading ? 1 : 0 }}
+        />
+      )}
+      {/* 半透明オーバーレイ */}
+      <div className="absolute inset-0 bg-black/45" />
+    </div>
+  )
+}
+
+// ========== ログインページ ==========
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-dvh" />}>
+    <Suspense fallback={<div className="min-h-dvh hero-gradient" />}>
+      <BackgroundSlideshow />
       <LoginPageInner />
     </Suspense>
   )
@@ -50,29 +135,30 @@ function LoginPageInner() {
   const pwValid = /^[a-zA-Z0-9]{8}$/.test(password)
 
   return (
-    <div className="min-h-dvh">
-      <div className="hero-gradient px-5 pt-10 pb-6 rounded-b-3xl">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1 text-white/80 text-sm mb-3"
-        >
-          <ArrowLeft size={18} />
-          戻る
-        </Link>
-        <div className="flex items-center gap-2 mb-2">
-          <LogIn size={20} className="text-white" />
-          <h1 className="text-xl font-bold text-white">ログイン</h1>
+    <div className="relative min-h-dvh flex flex-col items-center justify-center px-5 py-12">
+      {/* ロゴ・タイトル */}
+      <div className="mb-8 text-center">
+        <div className="inline-flex items-center gap-2 mb-3">
+          <LogIn size={22} className="text-white" />
+          <h1 className="text-2xl font-bold text-white tracking-wide">
+            Harbvisitor
+          </h1>
         </div>
-        <p className="text-white/80 text-sm">
-          IDとパスワードでログインします
+        <p className="text-white/75 text-sm">
+          見沼氷川公園 ハーブ園 来園者アプリ
         </p>
       </div>
 
-      <div className="px-4 py-6">
+      {/* フォームカード */}
+      <div className="w-full max-w-sm">
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl p-5 shadow-sm space-y-4"
+          className="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow-2xl space-y-4"
         >
+          <h2 className="text-base font-semibold text-herb-text text-center mb-1">
+            ログイン
+          </h2>
+
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               ID（英数字8桁）
@@ -87,9 +173,12 @@ function LoginPageInner() {
               placeholder="例: user1234"
             />
             {userId && !idValid && (
-              <p className="text-xs text-red-500 mt-1">IDは英数字8桁で入力してください</p>
+              <p className="text-xs text-red-500 mt-1">
+                IDは英数字8桁で入力してください
+              </p>
             )}
           </div>
+
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               パスワード（英数字8桁）
@@ -120,7 +209,10 @@ function LoginPageInner() {
 
           <p className="text-center text-xs text-herb-text-secondary">
             アカウントをお持ちでない方は{" "}
-            <Link href={`/register${redirect !== "/" ? `?redirect=${redirect}` : ""}`} className="text-herb-primary font-medium">
+            <Link
+              href={`/register${redirect !== "/" ? `?redirect=${redirect}` : ""}`}
+              className="text-herb-primary font-medium"
+            >
               新規登録
             </Link>
           </p>
