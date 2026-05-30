@@ -135,7 +135,7 @@ function LoginPageInner() {
   const pwValid = /^[a-zA-Z0-9]{8}$/.test(password)
 
   return (
-    <div className="relative min-h-dvh flex flex-col items-center justify-center px-5 py-12">
+    <div className="relative min-h-dvh flex flex-col items-center justify-center px-5 pt-28 pb-12">
       {/* ロゴ・タイトル */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center gap-2 mb-3">

@@ -8,6 +8,8 @@ export async function GET() {
     .from("plant_photos")
     .select("id, storage_path, plant_name, caption")
     .eq("caption", "開花")
+    .not("storage_path", "is", null)
+    .neq("storage_path", "")
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
