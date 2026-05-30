@@ -61,14 +61,15 @@ function BackgroundSlideshow() {
   const next = nextIndex !== null ? photos[nextIndex] : null
 
   return (
-    <div className="fixed inset-0 overflow-hidden">
+    <div className="fixed inset-0 overflow-hidden hero-gradient">
       {/* 現在の写真 */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={current.url}
         src={current.url}
-        alt={current.plant_name}
+        alt=""
         className="absolute inset-0 w-full h-full object-cover"
+        onError={(e) => { e.currentTarget.style.display = "none" }}
       />
       {/* 次の写真（フェードイン） */}
       {next && (
@@ -76,9 +77,10 @@ function BackgroundSlideshow() {
         <img
           key={next.url}
           src={next.url}
-          alt={next.plant_name}
+          alt=""
           className="absolute inset-0 w-full h-full object-cover transition-opacity duration-1000"
           style={{ opacity: fading ? 1 : 0 }}
+          onError={(e) => { e.currentTarget.style.display = "none" }}
         />
       )}
       {/* 半透明オーバーレイ */}
