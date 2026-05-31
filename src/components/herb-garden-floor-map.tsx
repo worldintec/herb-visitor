@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
 import { AreaDetailModal } from "@/components/AreaDetailModal"
@@ -105,6 +105,44 @@ export default function HerbGardenFloorMap() {
     })
   }, [])
 
+  // ── ゾーン別プロット境界ボックス（herb-gardenと同一ロジック） ───────────────
+  const PLOT_RADIUS = 6
+  const PLOT_PADDING = 10
+
+  const zonePlotBounds = useMemo(() => {
+    const bounds: Partial<Record<Zone, { minX: number; maxX: number; minY: number; maxY: number }>> = {}
+
+    const expand = (zone: Zone, x: number, y: number) => {
+      const b = bounds[zone]
+      if (!b) {
+        bounds[zone] = { minX: x, maxX: x, minY: y, maxY: y }
+      } else {
+        b.minX = Math.min(b.minX, x)
+        b.maxX = Math.max(b.maxX, x)
+        b.minY = Math.min(b.minY, y)
+        b.maxY = Math.max(b.maxY, y)
+      }
+    }
+
+    // Excel植物位置（参照ドット）
+    EXCEL_PLANTS.forEach((plant) => {
+      const zone = plant.area as Zone
+      if (!ZONES.includes(zone)) return
+      const off = zoneOffsets[zone]
+      const { x, y } = excelToSvg(plant.x, plant.y)
+      expand(zone, x + off.dx, y + off.dy)
+    })
+
+    // DBに登録されたプロット
+    plots.forEach((plot) => {
+      const zone = plot.zone as Zone
+      if (!ZONES.includes(zone)) return
+      expand(zone, plot.x, plot.y)
+    })
+
+    return bounds
+  }, [plots, zoneOffsets])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-gray-400">
@@ -177,14 +215,18 @@ export default function HerbGardenFloorMap() {
           {ZONES_BY_SIZE.map((zone) => {
             const a = ZONE_AREAS[zone]
             const off = zoneOffsets[zone]
-            const ax = a.x + off.dx
-            const ay = a.y + off.dy
+            // プロットが存在する場合はその上下左右範囲に枠を合わせる
+            const pb = zonePlotBounds[zone]
+            const ax = pb ? pb.minX - PLOT_RADIUS - PLOT_PADDING : a.x + off.dx
+            const aw = pb ? (pb.maxX + PLOT_RADIUS + PLOT_PADDING) - ax : a.w
+            const ay = pb ? pb.minY - PLOT_RADIUS - PLOT_PADDING : a.y + off.dy
+            const ah = pb ? (pb.maxY + PLOT_RADIUS + PLOT_PADDING) - ay : a.h
             const isHovered = hoveredZone === zone
             return (
               <g key={zone}>
                 {/* ハイライト背景 */}
                 <rect
-                  x={ax} y={ay} width={a.w} height={a.h}
+                  x={ax} y={ay} width={aw} height={ah}
                   rx={3}
                   fill="#1D9E75"
                   fillOpacity={isHovered ? 0.18 : 0}
@@ -192,7 +234,7 @@ export default function HerbGardenFloorMap() {
                 />
                 {/* ゾーン枠（クリック受付） */}
                 <rect
-                  x={ax} y={ay} width={a.w} height={a.h}
+                  x={ax} y={ay} width={aw} height={ah}
                   rx={3}
                   fill="transparent"
                   stroke="#1D9E75"
@@ -204,12 +246,12 @@ export default function HerbGardenFloorMap() {
                   onMouseLeave={() => setHoveredZone(null)}
                   onClick={() => setSelectedArea(zone)}
                 />
-                {/* ゾーンラベル */}
+                {/* ゾーンラベル（左上固定・見切れ防止） */}
                 <text
-                  x={ax + a.w / 2}
-                  y={ay + Math.min(13, a.h / 2 + 4)}
-                  textAnchor="middle"
-                  fontSize={Math.min(11, a.w * 0.5)}
+                  x={ax + 4}
+                  y={ay + 11}
+                  textAnchor="start"
+                  fontSize={11}
                   fontWeight={500}
                   fill={isHovered ? "#0F6E56" : "#5f5e5a"}
                   fillOpacity={isHovered ? 1 : 0.65}
