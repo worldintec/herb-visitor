@@ -3,12 +3,21 @@ import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { createSessionToken, setSessionCookie, ID_PATTERN, PW_PATTERN } from "@/lib/auth"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const dynamic = "force-dynamic"
+
+// JIT warmup: bcryptjs は初回呼び出し時に V8 コンパイルが走り遅延するため
+// モジュールロード時に低コストで一度実行してキャッシュさせる
+bcrypt.hashSync("__warmup__", 1)
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabase()
   try {
     const { userId, password } = await request.json()
 
@@ -31,10 +40,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "IDまたはパスワードが正しくありません" }, { status: 401 })
     }
 
-    await supabase
+    // last_login_at の更新はレスポンスをブロックしない（fire and forget）
+    supabase
       .from("users")
       .update({ last_login_at: new Date().toISOString() })
       .eq("id", user.id)
+      .then(() => {})
 
     const token = await createSessionToken({ userId: user.id, userCode: user.user_id })
     await setSessionCookie(token)

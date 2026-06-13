@@ -3,34 +3,42 @@ import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { createSessionToken, setSessionCookie, ID_PATTERN, PW_PATTERN } from "@/lib/auth"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const dynamic = "force-dynamic"
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabase()
   try {
     const { userId, password, tosAgreed, tosVersion } = await request.json()
 
     if (!ID_PATTERN.test(userId)) {
-      return NextResponse.json({ error: "IDは英数字8桁で入力してください" }, { status: 400 })
+      return NextResponse.json({ error: "IDは英数字8〜16文字で入力してください" }, { status: 400 })
     }
     if (!PW_PATTERN.test(password)) {
-      return NextResponse.json({ error: "パスワードは英数字8桁で入力してください" }, { status: 400 })
+      return NextResponse.json({ error: "パスワードは英数字8〜16文字で入力してください" }, { status: 400 })
     }
-    // 利用規約への同意チェック（サーバー側でも再確認）
     if (tosAgreed !== true) {
       return NextResponse.json({ error: "利用規約への同意が必要です" }, { status: 400 })
     }
 
-    // 既存ID重複チェック
+    // 既存ID重複チェック（同一パスワードの場合は別メッセージ）
     const { data: existing } = await supabase
       .from("users")
-      .select("id")
+      .select("id, password_hash")
       .eq("user_id", userId)
       .maybeSingle()
 
     if (existing) {
+      const samePassword = await bcrypt.compare(password, existing.password_hash)
+      if (samePassword) {
+        return NextResponse.json({ error: "このIDは使用できません" }, { status: 409 })
+      }
       return NextResponse.json({ error: "このIDは既に使用されています" }, { status: 409 })
     }
 

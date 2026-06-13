@@ -55,5 +55,5 @@ export async function getSession(): Promise<SessionPayload | null> {
   return verifySessionToken(token)
 }
 
-export const ID_PATTERN = /^[a-zA-Z0-9]{8}$/
-export const PW_PATTERN = /^[a-zA-Z0-9]{8}$/
+export const ID_PATTERN = /^[a-zA-Z0-9]{8,16}$/
+export const PW_PATTERN = /^[a-zA-Z0-9]{8,16}$/
