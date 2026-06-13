@@ -24,7 +24,6 @@ function BackgroundSlideshow() {
       .then((r) => r.json())
       .then(({ photos: data }: { photos: BloomPhoto[] }) => {
         if (data && data.length > 0) {
-          // シャッフルして開始
           const shuffled = [...data].sort(() => Math.random() - 0.5)
           setPhotos(shuffled)
           setCurrentIndex(0)
@@ -38,7 +37,6 @@ function BackgroundSlideshow() {
     const next = (currentIndex + 1) % photos.length
     setNextIndex(next)
     setFading(true)
-    // フェード完了後に切り替え
     setTimeout(() => {
       setCurrentIndex(next)
       setNextIndex(null)
@@ -53,7 +51,6 @@ function BackgroundSlideshow() {
   }, [photos.length, advance])
 
   if (photos.length === 0) {
-    // 写真なし：グラデーション背景
     return <div className="fixed inset-0 hero-gradient" />
   }
 
@@ -62,7 +59,6 @@ function BackgroundSlideshow() {
 
   return (
     <div className="fixed inset-0 overflow-hidden hero-gradient">
-      {/* 現在の写真 */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={current.url}
@@ -71,7 +67,6 @@ function BackgroundSlideshow() {
         className="absolute inset-0 w-full h-full object-cover"
         onError={(e) => { e.currentTarget.style.display = "none" }}
       />
-      {/* 次の写真（フェードイン） */}
       {next && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -83,7 +78,6 @@ function BackgroundSlideshow() {
           onError={(e) => { e.currentTarget.style.display = "none" }}
         />
       )}
-      {/* 半透明オーバーレイ */}
       <div className="absolute inset-0 bg-black/45" />
     </div>
   )
@@ -133,8 +127,8 @@ function LoginPageInner() {
     }
   }
 
-  const idValid = /^[a-zA-Z0-9]{8}$/.test(userId)
-  const pwValid = /^[a-zA-Z0-9]{8}$/.test(password)
+  const idValid = /^[a-zA-Z0-9]{8,16}$/.test(userId)
+  const pwValid = /^[a-zA-Z0-9]{8,16}$/.test(password)
 
   return (
     <div className="relative min-h-dvh flex flex-col items-center justify-center px-5 pt-28 pb-12">
@@ -163,34 +157,34 @@ function LoginPageInner() {
 
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
-              ID（英数字8桁）
+              ID（英数字8〜16文字）
             </label>
             <input
               type="text"
               value={userId}
               onChange={(e) => setUserId(e.target.value.trim())}
               autoComplete="username"
-              maxLength={8}
+              maxLength={16}
               className="w-full h-10 rounded-lg border border-herb-border bg-white px-3 text-sm outline-none focus:border-herb-primary"
               placeholder="例: user1234"
             />
             {userId && !idValid && (
               <p className="text-xs text-red-500 mt-1">
-                IDは英数字8桁で入力してください
+                IDは英数字8〜16文字で入力してください
               </p>
             )}
           </div>
 
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
-              パスワード（英数字8桁）
+              パスワード（英数字8〜16文字）
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              maxLength={8}
+              maxLength={16}
               className="w-full h-10 rounded-lg border border-herb-border bg-white px-3 text-sm outline-none focus:border-herb-primary"
             />
           </div>
@@ -216,6 +210,15 @@ function LoginPageInner() {
               className="text-herb-primary font-medium"
             >
               新規登録
+            </Link>
+          </p>
+
+          <p className="text-center text-xs text-herb-text-secondary">
+            <Link
+              href="/forgot-password"
+              className="text-herb-primary/80 hover:text-herb-primary underline underline-offset-2"
+            >
+              IDまたはパスワードを忘れた方はこちら
             </Link>
           </p>
         </form>

@@ -5,6 +5,8 @@ import { verifySessionToken } from "@/lib/auth"
 const PUBLIC_PATHS = [
   "/login",
   "/register",
+  "/forgot-password",
+  "/reset-password",
   "/api/auth/",
   "/api/bloom-photos",
   "/_next/",

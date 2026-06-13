@@ -25,8 +25,8 @@ function RegisterPageInner() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const idValid = /^[a-zA-Z0-9]{8}$/.test(userId)
-  const pwValid = /^[a-zA-Z0-9]{8}$/.test(password)
+  const idValid = /^[a-zA-Z0-9]{8,16}$/.test(userId)
+  const pwValid = /^[a-zA-Z0-9]{8,16}$/.test(password)
   const matchValid = password === passwordConfirm && password.length > 0
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,7 +73,7 @@ function RegisterPageInner() {
           <h1 className="text-xl font-bold text-white">新規登録</h1>
         </div>
         <p className="text-white/80 text-sm">
-          メールアドレスは不要。IDとパスワード（英数字8桁）のみで登録できます。
+          メールアドレスは不要。IDとパスワード（英数字8〜16文字）のみで登録できます。
         </p>
       </div>
 
@@ -84,35 +84,35 @@ function RegisterPageInner() {
         >
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
-              ID（英数字8桁）
+              ID（英数字8〜16文字）
             </label>
             <input
               type="text"
               value={userId}
               onChange={(e) => setUserId(e.target.value.trim())}
               autoComplete="username"
-              maxLength={8}
+              maxLength={16}
               className="w-full h-10 rounded-lg border border-herb-border bg-white px-3 text-sm outline-none focus:border-herb-primary"
               placeholder="例: user1234"
             />
             {userId && !idValid && (
-              <p className="text-xs text-red-500 mt-1">IDは英数字8桁ちょうどで入力してください</p>
+              <p className="text-xs text-red-500 mt-1">IDは英数字8〜16文字で入力してください</p>
             )}
           </div>
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
-              パスワード（英数字8桁）
+              パスワード（英数字8〜16文字）
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              maxLength={8}
+              maxLength={16}
               className="w-full h-10 rounded-lg border border-herb-border bg-white px-3 text-sm outline-none focus:border-herb-primary"
             />
             {password && !pwValid && (
-              <p className="text-xs text-red-500 mt-1">パスワードは英数字8桁ちょうどで入力してください</p>
+              <p className="text-xs text-red-500 mt-1">パスワードは英数字8〜16文字で入力してください</p>
             )}
           </div>
           <div>
@@ -124,7 +124,7 @@ function RegisterPageInner() {
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               autoComplete="new-password"
-              maxLength={8}
+              maxLength={16}
               className="w-full h-10 rounded-lg border border-herb-border bg-white px-3 text-sm outline-none focus:border-herb-primary"
             />
             {passwordConfirm && !matchValid && (
