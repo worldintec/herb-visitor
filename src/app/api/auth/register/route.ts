@@ -3,12 +3,17 @@ import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { createSessionToken, setSessionCookie, ID_PATTERN, PW_PATTERN } from "@/lib/auth"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const dynamic = "force-dynamic"
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabase()
   try {
     const { userId, password, tosAgreed, tosVersion } = await request.json()
 
@@ -32,7 +37,6 @@ export async function POST(request: NextRequest) {
     if (existing) {
       const samePassword = await bcrypt.compare(password, existing.password_hash)
       if (samePassword) {
-        // ID・パスワードが完全一致 → 詳細を返さず汎用メッセージ
         return NextResponse.json({ error: "このIDは使用できません" }, { status: 409 })
       }
       return NextResponse.json({ error: "このIDは既に使用されています" }, { status: 409 })

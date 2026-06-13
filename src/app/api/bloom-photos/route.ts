@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
+export const dynamic = "force-dynamic"
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
 export async function GET() {

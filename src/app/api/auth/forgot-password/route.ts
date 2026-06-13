@@ -4,12 +4,17 @@ import { randomBytes } from "crypto"
 import { sendPasswordResetEmail } from "@/lib/mailer"
 import { ID_PATTERN } from "@/lib/auth"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const dynamic = "force-dynamic"
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function POST(request: NextRequest) {
+  const supabase = getSupabase()
   try {
     const { userId, email } = await request.json()
 
