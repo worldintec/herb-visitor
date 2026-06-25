@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
 import { AreaDetailModal } from "@/components/AreaDetailModal"
 import { EXCEL_PLANTS } from "@/data/excel-plants"
+import { X } from "lucide-react"
 
 // ─── ゾーン定義 ────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,116 @@ const TYPE_LABELS: Record<string, string> = {
   other:     "その他",
 }
 
+// ─── プロット情報ポップアップ ─────────────────────────────────────────────────
+
+// 実測前のサイズ上限（getBoundingClientRect で実測したサイズが入ればそれを優先する）
+const POPUP_MAX_WIDTH = 260
+const POPUP_MAX_HEIGHT = 160
+const POPUP_VIEWPORT_MARGIN = 8
+
+interface PopupPosition {
+  left: number
+  top: number
+}
+
+/** プロットのスクリーン座標とポップアップサイズから、ビューポート内に収まる表示位置を求める */
+function computePopupPosition(
+  anchorRect: DOMRect,
+  popupWidth: number,
+  popupHeight: number
+): PopupPosition {
+  const plotX = anchorRect.left + anchorRect.width / 2
+  const plotY = anchorRect.top + anchorRect.height / 2
+
+  let flipX = plotX + popupWidth + POPUP_VIEWPORT_MARGIN > window.innerWidth
+  let flipY = plotY + popupHeight + POPUP_VIEWPORT_MARGIN > window.innerHeight
+
+  // 左端を超える場合は左反転を取り消し、右側に強制
+  if (flipX && plotX - popupWidth - POPUP_VIEWPORT_MARGIN < 0) flipX = false
+  // 上端を超える場合は上反転を取り消し、下側に強制
+  if (flipY && plotY - popupHeight - POPUP_VIEWPORT_MARGIN < 0) flipY = false
+
+  let left = flipX ? plotX - popupWidth : plotX
+  let top = flipY ? plotY - popupHeight : plotY
+
+  // 最終的な保険として、画面内に完全に収まるようクランプする
+  left = Math.min(
+    Math.max(left, POPUP_VIEWPORT_MARGIN),
+    window.innerWidth - popupWidth - POPUP_VIEWPORT_MARGIN
+  )
+  top = Math.min(
+    Math.max(top, POPUP_VIEWPORT_MARGIN),
+    window.innerHeight - popupHeight - POPUP_VIEWPORT_MARGIN
+  )
+
+  return { left, top }
+}
+
+interface PlotPopupState {
+  plot: MapPlot
+  anchorRect: DOMRect
+}
+
+function PlotInfoPopup({
+  plot,
+  anchorRect,
+  onClose,
+}: {
+  plot: MapPlot
+  anchorRect: DOMRect
+  onClose: () => void
+}) {
+  const popupRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<PopupPosition>(() =>
+    computePopupPosition(anchorRect, POPUP_MAX_WIDTH, POPUP_MAX_HEIGHT)
+  )
+
+  useEffect(() => {
+    // DOM追加後に実サイズで再計算（端末・文字量によって高さが変わるため）
+    const el = popupRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    setPos(computePopupPosition(anchorRect, rect.width, rect.height))
+  }, [anchorRect])
+
+  return (
+    <div
+      ref={popupRef}
+      style={{
+        position: "fixed",
+        left: pos.left,
+        top: pos.top,
+        maxWidth: POPUP_MAX_WIDTH,
+        zIndex: 70,
+      }}
+      className="bg-white rounded-xl shadow-lg border border-gray-100 p-3"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-800 truncate">
+            {plot.name}
+          </p>
+          <p className="text-xs text-herb-text-secondary mt-0.5">
+            {TYPE_LABELS[plot.type] ?? plot.type} ・ エリア {plot.zone}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-full hover:bg-gray-100 active:bg-gray-200 transition-colors flex-shrink-0"
+          aria-label="閉じる"
+        >
+          <X size={14} className="text-gray-500" />
+        </button>
+      </div>
+      {plot.note && (
+        <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap">
+          {plot.note}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── コンポーネント ─────────────────────────────────────────────────────────────
 
 export default function HerbGardenFloorMap() {
@@ -80,6 +191,7 @@ export default function HerbGardenFloorMap() {
   const [hoveredZone, setHoveredZone] = useState<Zone | null>(null)
   const [hoveredPlot, setHoveredPlot] = useState<string | null>(null)
   const [selectedArea, setSelectedArea] = useState<Zone | null>(null)
+  const [plotPopup, setPlotPopup] = useState<PlotPopupState | null>(null)
   const [zoneOffsets, setZoneOffsets] = useState<Record<Zone, { dx: number; dy: number }>>(
     () => Object.fromEntries(ZONES.map(z => [z, { dx: 0, dy: 0 }])) as Record<Zone, { dx: number; dy: number }>
   )
@@ -293,9 +405,14 @@ export default function HerbGardenFloorMap() {
             return (
               <g
                 key={plot.id}
-                style={{ cursor: "default" }}
+                style={{ cursor: "pointer" }}
                 onMouseEnter={() => setHoveredPlot(plot.id)}
                 onMouseLeave={() => setHoveredPlot(null)}
+                onClick={(e) => {
+                  // ズーム・スクロール後でも正しいスクリーン座標を得るため currentTarget の実測位置を使う
+                  const anchorRect = e.currentTarget.getBoundingClientRect()
+                  setPlotPopup({ plot, anchorRect })
+                }}
               >
                 <title>{plot.name}（エリア {plot.zone}）</title>
                 {isHovered && (
@@ -355,6 +472,22 @@ export default function HerbGardenFloorMap() {
         <p className="text-xs text-center text-gray-400 py-2">
           プロットはまだ登録されていません
         </p>
+      )}
+
+      {/* プロット情報ポップアップ */}
+      {plotPopup && (
+        <>
+          {/* 背面タップで閉じる透明オーバーレイ */}
+          <div
+            className="fixed inset-0 z-[65]"
+            onClick={() => setPlotPopup(null)}
+          />
+          <PlotInfoPopup
+            plot={plotPopup.plot}
+            anchorRect={plotPopup.anchorRect}
+            onClose={() => setPlotPopup(null)}
+          />
+        </>
       )}
 
       {/* エリア拡大図モーダル */}
