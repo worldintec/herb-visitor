@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
 import { EXCEL_PLANTS } from "@/data/excel-plants"
-import { resetPinchZoom } from "@/lib/reset-pinch-zoom"
 
 // ─── ゾーン定義 ────────────────────────────────────────────────────────────────
 
@@ -73,10 +72,52 @@ const TYPE_LABELS: Record<string, string> = {
   other:     "その他",
 }
 
+// ─── アプリ内ズーム・パン ───────────────────────────────────────────────────────
+// ブラウザのネイティブピンチズームに依存すると、ページ遷移後もズーム状態が
+// 残ってしまい解除できない（iOS Safariはアクセシビリティのためmaximum-scale/
+// user-scalable指定を無視するためJSからの解除が不可能）。そのためマップ自体に
+// transform: scaleでズーム・パンを実装し、ネイティブズームはtouch-action: noneで止める。
+
+const MIN_SCALE = 1
+const MAX_SCALE = 4
+
+interface MapTransform {
+  scale: number
+  x: number
+  y: number
+}
+
+function clampNumber(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v))
+}
+
+function getMidpoint(pts: { x: number; y: number }[]): { x: number; y: number } {
+  const x = pts.reduce((s, p) => s + p.x, 0) / pts.length
+  const y = pts.reduce((s, p) => s + p.y, 0) / pts.length
+  return { x, y }
+}
+
+function getDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+interface ZoomGesture {
+  mode: "pan" | "pinch"
+  startTransform: MapTransform
+  startMidpoint: { x: number; y: number }
+  startDist: number
+  moved: boolean
+}
+
 // ─── コンポーネント ─────────────────────────────────────────────────────────────
 
 export default function HerbGardenFloorMap() {
   const router = useRouter()
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const [transform, setTransform] = useState<MapTransform>({ scale: 1, x: 0, y: 0 })
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const gestureRef = useRef<ZoomGesture | null>(null)
+  const suppressClickRef = useRef(false)
   const [plots, setPlots] = useState<MapPlot[]>([])
   const [loading, setLoading] = useState(true)
   const [hoveredZone, setHoveredZone] = useState<Zone | null>(null)
@@ -144,6 +185,141 @@ export default function HerbGardenFloorMap() {
     return bounds
   }, [plots, zoneOffsets])
 
+  // ── ズーム・パンのジェスチャー処理 ──────────────────────────────────────────
+  function localPoint(e: { clientX: number; clientY: number }): { x: number; y: number } {
+    const rect = mapContainerRef.current!.getBoundingClientRect()
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  function clampTransform(t: MapTransform): MapTransform {
+    const el = mapContainerRef.current
+    if (!el) return t
+    const { width, height } = el.getBoundingClientRect()
+    const scale = clampNumber(t.scale, MIN_SCALE, MAX_SCALE)
+    if (scale === MIN_SCALE) return { scale, x: 0, y: 0 }
+    const minX = width - width * scale
+    const minY = height - height * scale
+    return {
+      scale,
+      x: clampNumber(t.x, minX, 0),
+      y: clampNumber(t.y, minY, 0),
+    }
+  }
+
+  function zoomAt(point: { x: number; y: number }, prev: MapTransform, newScale: number): MapTransform {
+    const contentX = (point.x - prev.x) / prev.scale
+    const contentY = (point.y - prev.y) / prev.scale
+    return clampTransform({
+      scale: newScale,
+      x: point.x - contentX * newScale,
+      y: point.y - contentY * newScale,
+    })
+  }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    pointersRef.current.set(e.pointerId, localPoint(e))
+    const pts = Array.from(pointersRef.current.values())
+    if (pts.length === 1) {
+      gestureRef.current = {
+        mode: "pan",
+        startTransform: transform,
+        startMidpoint: pts[0],
+        startDist: 0,
+        moved: false,
+      }
+    } else if (pts.length === 2) {
+      gestureRef.current = {
+        mode: "pinch",
+        startTransform: transform,
+        startMidpoint: getMidpoint(pts),
+        startDist: getDistance(pts[0], pts[1]),
+        moved: false,
+      }
+    }
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    if (!pointersRef.current.has(e.pointerId)) return
+    pointersRef.current.set(e.pointerId, localPoint(e))
+    const gesture = gestureRef.current
+    if (!gesture) return
+    const pts = Array.from(pointersRef.current.values())
+
+    if (gesture.mode === "pan" && pts.length === 1) {
+      const dx = pts[0].x - gesture.startMidpoint.x
+      const dy = pts[0].y - gesture.startMidpoint.y
+      if (Math.hypot(dx, dy) > 4) gesture.moved = true
+      if (gesture.startTransform.scale > MIN_SCALE) {
+        e.preventDefault()
+        setTransform(
+          clampTransform({
+            scale: gesture.startTransform.scale,
+            x: gesture.startTransform.x + dx,
+            y: gesture.startTransform.y + dy,
+          })
+        )
+      }
+    } else if (gesture.mode === "pinch" && pts.length === 2) {
+      e.preventDefault()
+      const dist = getDistance(pts[0], pts[1])
+      const mid = getMidpoint(pts)
+      const newScale = clampNumber(
+        gesture.startTransform.scale * (dist / gesture.startDist),
+        MIN_SCALE,
+        MAX_SCALE
+      )
+      gesture.moved = true
+      const contentX = (gesture.startMidpoint.x - gesture.startTransform.x) / gesture.startTransform.scale
+      const contentY = (gesture.startMidpoint.y - gesture.startTransform.y) / gesture.startTransform.scale
+      setTransform(
+        clampTransform({
+          scale: newScale,
+          x: mid.x - contentX * newScale,
+          y: mid.y - contentY * newScale,
+        })
+      )
+    }
+  }
+
+  function handlePointerUp(e: React.PointerEvent) {
+    pointersRef.current.delete(e.pointerId)
+    if (gestureRef.current?.moved) {
+      suppressClickRef.current = true
+    }
+    if (pointersRef.current.size === 0) {
+      gestureRef.current = null
+    } else if (pointersRef.current.size === 1) {
+      // 2本指→1本指に減ったらパンを再開
+      const [pt] = Array.from(pointersRef.current.values())
+      gestureRef.current = {
+        mode: "pan",
+        startTransform: transform,
+        startMidpoint: pt,
+        startDist: 0,
+        moved: gestureRef.current?.moved ?? false,
+      }
+    }
+  }
+
+  function handleDoubleClick(e: React.MouseEvent) {
+    const point = localPoint(e)
+    setTransform((prev) =>
+      prev.scale > MIN_SCALE
+        ? { scale: MIN_SCALE, x: 0, y: 0 }
+        : zoomAt(point, prev, 2.2)
+    )
+  }
+
+  function handleWheel(e: React.WheelEvent) {
+    if (!e.ctrlKey) return
+    e.preventDefault()
+    const point = localPoint(e)
+    setTransform((prev) =>
+      zoomAt(point, prev, clampNumber(prev.scale * (1 - e.deltaY * 0.01), MIN_SCALE, MAX_SCALE))
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-gray-400">
@@ -154,11 +330,33 @@ export default function HerbGardenFloorMap() {
 
   return (
     <div className="space-y-2">
-      {/* マップSVG */}
-      <div className="bg-white rounded-xl overflow-hidden border border-gray-100">
+      {/* マップSVG（アプリ内ズーム・パン対応） */}
+      <div
+        ref={mapContainerRef}
+        className="relative bg-white rounded-xl overflow-hidden border border-gray-100 select-none"
+        style={{ touchAction: "none" }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
+        onWheel={handleWheel}
+      >
+        {transform.scale > MIN_SCALE && (
+          <button
+            onClick={() => setTransform({ scale: MIN_SCALE, x: 0, y: 0 })}
+            className="absolute top-2 right-2 z-10 bg-white/90 backdrop-blur rounded-full px-3 py-1.5 text-xs font-medium text-herb-primary shadow border border-gray-200"
+          >
+            全体表示に戻す
+          </button>
+        )}
         <svg
           viewBox="0 0 1000 480"
           className="w-full h-auto block"
+          style={{
+            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+            transformOrigin: "0 0",
+          }}
         >
           <defs>
             <pattern
@@ -245,7 +443,13 @@ export default function HerbGardenFloorMap() {
                   style={{ cursor: "pointer" }}
                   onMouseEnter={() => setHoveredZone(zone)}
                   onMouseLeave={() => setHoveredZone(null)}
-                  onClick={() => resetPinchZoom(() => router.push(`/areas/${zone}`))}
+                  onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false
+                      return
+                    }
+                    router.push(`/areas/${zone}`)
+                  }}
                 />
                 {/* ゾーンラベル（左上固定・見切れ防止） */}
                 <text
@@ -297,7 +501,13 @@ export default function HerbGardenFloorMap() {
                 style={{ cursor: "pointer" }}
                 onMouseEnter={() => setHoveredPlot(plot.id)}
                 onMouseLeave={() => setHoveredPlot(null)}
-                onClick={() => resetPinchZoom(() => router.push(`/areas/${plot.zone}`))}
+                onClick={() => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false
+                    return
+                  }
+                  router.push(`/areas/${plot.zone}`)
+                }}
               >
                 <title>{plot.name}（エリア {plot.zone}）</title>
                 {isHovered && (

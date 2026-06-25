@@ -9,7 +9,6 @@ import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
 import { EXCEL_PLANTS } from "@/data/excel-plants"
-import { resetPinchZoom } from "@/lib/reset-pinch-zoom"
 
 export default function AreaDetailPage({
   params,
@@ -25,11 +24,6 @@ export default function AreaDetailPage({
 
   // EXCEL_PLANTSからこのエリアの植物位置を取得
   const excelPositions = EXCEL_PLANTS.filter((p) => p.area === areaId)
-
-  useEffect(() => {
-    // マップでピンチズームした状態から遷移してきた場合に備え、表示直後にズームをリセットする
-    resetPinchZoom()
-  }, [])
 
   useEffect(() => {
     async function fetchData() {
