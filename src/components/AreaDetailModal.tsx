@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { X, MapPin } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { resetPinchZoom } from "@/lib/reset-pinch-zoom"
 import type { Plant } from "@/types/database"
 
 // ─── ミニマップ ──────────────────────────────────────────────────────────────
@@ -107,6 +108,8 @@ export function AreaDetailModal({
       setPlants([])
       return
     }
+    // ピンチズーム中に開いた場合、fixed要素が見切れないようズームをリセットする
+    resetPinchZoom()
     setLoading(true)
     supabase
       .from("plants")

@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
 import { AreaDetailModal } from "@/components/AreaDetailModal"
 import { EXCEL_PLANTS } from "@/data/excel-plants"
+import { resetPinchZoom } from "@/lib/reset-pinch-zoom"
 import { X } from "lucide-react"
 
 // ─── ゾーン定義 ────────────────────────────────────────────────────────────────
@@ -356,7 +357,10 @@ export default function HerbGardenFloorMap() {
                   style={{ cursor: "pointer" }}
                   onMouseEnter={() => setHoveredZone(zone)}
                   onMouseLeave={() => setHoveredZone(null)}
-                  onClick={() => setSelectedArea(zone)}
+                  onClick={() => {
+                    resetPinchZoom()
+                    setSelectedArea(zone)
+                  }}
                 />
                 {/* ゾーンラベル（左上固定・見切れ防止） */}
                 <text
@@ -410,8 +414,10 @@ export default function HerbGardenFloorMap() {
                 onMouseLeave={() => setHoveredPlot(null)}
                 onClick={(e) => {
                   // ズーム・スクロール後でも正しいスクリーン座標を得るため currentTarget の実測位置を使う
-                  const anchorRect = e.currentTarget.getBoundingClientRect()
-                  setPlotPopup({ plot, anchorRect })
+                  const target = e.currentTarget
+                  resetPinchZoom(() => {
+                    setPlotPopup({ plot, anchorRect: target.getBoundingClientRect() })
+                  })
                 }}
               >
                 <title>{plot.name}（エリア {plot.zone}）</title>
