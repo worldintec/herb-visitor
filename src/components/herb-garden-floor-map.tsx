@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
 import { EXCEL_PLANTS } from "@/data/excel-plants"
+import { resetPinchZoom } from "@/lib/reset-pinch-zoom"
 
 // ─── ゾーン定義 ────────────────────────────────────────────────────────────────
 
@@ -244,7 +245,7 @@ export default function HerbGardenFloorMap() {
                   style={{ cursor: "pointer" }}
                   onMouseEnter={() => setHoveredZone(zone)}
                   onMouseLeave={() => setHoveredZone(null)}
-                  onClick={() => router.push(`/areas/${zone}`)}
+                  onClick={() => resetPinchZoom(() => router.push(`/areas/${zone}`))}
                 />
                 {/* ゾーンラベル（左上固定・見切れ防止） */}
                 <text
@@ -296,7 +297,7 @@ export default function HerbGardenFloorMap() {
                 style={{ cursor: "pointer" }}
                 onMouseEnter={() => setHoveredPlot(plot.id)}
                 onMouseLeave={() => setHoveredPlot(null)}
-                onClick={() => router.push(`/areas/${plot.zone}`)}
+                onClick={() => resetPinchZoom(() => router.push(`/areas/${plot.zone}`))}
               >
                 <title>{plot.name}（エリア {plot.zone}）</title>
                 {isHovered && (
