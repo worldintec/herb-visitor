@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       .from("users")
       .update({ last_login_at: new Date().toISOString() })
       .eq("id", user.id)
-      .then(() => {})
+      .then(() => {}, () => {})
 
     const token = await createSessionToken({ userId: user.id, userCode: user.user_id })
     await setSessionCookie(token)

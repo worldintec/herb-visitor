@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { LogIn } from "lucide-react"
 
 // ========== 背景スライドショー ==========
@@ -95,7 +95,6 @@ export default function LoginPage() {
 }
 
 function LoginPageInner() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get("redirect") || "/"
   const [userId, setUserId] = useState("")
@@ -119,8 +118,9 @@ function LoginPageInner() {
         setSubmitting(false)
         return
       }
-      router.push(redirect)
-      router.refresh()
+      // router.push はCookie反映前にRSCリクエストを発行するレースが発生し、
+      // 初回ログインが固まったように見える原因になるためフルページ遷移にする
+      window.location.href = redirect
     } catch {
       setError("通信エラーが発生しました")
       setSubmitting(false)
