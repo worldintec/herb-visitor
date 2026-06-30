@@ -5,7 +5,7 @@ import AutoLogoutProvider from "@/components/auto-logout-provider"
 import SwRegister from "@/components/sw-register"
 
 export const metadata: Metadata = {
-  title: "見沼氷川公園 ハーブ園ガイド",
+  title: "見沼氷川ハーブ園",
   description:
     "見沼氷川公園ハーブ園の植物ガイド。園内のハーブを写真付きで紹介します。",
   icons: {
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "ハーブ園ガイド",
+    title: "見沼氷川ハーブ園",
   },
 }
 

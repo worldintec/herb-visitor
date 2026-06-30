@@ -1,4 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="80" fill="#16a34a"/>
-  <text x="256" y="360" font-size="300" text-anchor="middle" font-family="serif">🌿</text>
+  <rect width="512" height="512" rx="100" fill="#16a34a"/>
+  <!-- 葉のパス -->
+  <path d="M256 88 C256 88, 148 180, 148 276 C148 348, 196 400, 256 408 C256 408, 256 256, 256 88 Z" fill="#4ade80"/>
+  <path d="M256 88 C256 88, 364 180, 364 276 C364 348, 316 400, 256 408 C256 408, 256 256, 256 88 Z" fill="#22c55e"/>
+  <!-- 中央の葉脈 -->
+  <line x1="256" y1="96" x2="256" y2="408" stroke="#166534" stroke-width="7" stroke-linecap="round"/>
+  <!-- 横の葉脈 -->
+  <line x1="256" y1="200" x2="192" y2="252" stroke="#166534" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <line x1="256" y1="200" x2="320" y2="252" stroke="#166534" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <line x1="256" y1="272" x2="200" y2="316" stroke="#166534" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <line x1="256" y1="272" x2="312" y2="316" stroke="#166534" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <line x1="256" y1="336" x2="216" y2="368" stroke="#166534" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+  <line x1="256" y1="336" x2="296" y2="368" stroke="#166534" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
 </svg>
