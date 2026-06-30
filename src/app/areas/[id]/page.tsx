@@ -8,7 +8,8 @@ import { supabase } from "@/lib/supabase"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
-import { EXCEL_PLANTS } from "@/data/excel-plants"
+
+type PlantPos = { name: string; x: number; y: number }
 
 export default function AreaDetailPage({
   params,
@@ -18,12 +19,10 @@ export default function AreaDetailPage({
   const { id: areaId } = use(params)
   const router = useRouter()
   const [plants, setPlants] = useState<Plant[]>([])
+  const [positions, setPositions] = useState<PlantPos[]>([])
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
   const [selectedPlant, setSelectedPlant] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-
-  // EXCEL_PLANTSからこのエリアの植物位置を取得
-  const excelPositions = EXCEL_PLANTS.filter((p) => p.area === areaId)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -31,12 +30,9 @@ export default function AreaDetailPage({
 
   useEffect(() => {
     async function fetchData() {
-      const [plantsRes] = await Promise.all([
-        supabase
-          .from("plants")
-          .select("*")
-          .eq("area", areaId)
-          .order("plant_no"),
+      const [plantsRes, posRes] = await Promise.all([
+        supabase.from("plants").select("*").eq("area", areaId).order("plant_no"),
+        supabase.from("plant_positions").select("name, x, y").eq("area", areaId),
       ])
 
       if (plantsRes.data) {
@@ -65,20 +61,22 @@ export default function AreaDetailPage({
         }
       }
 
+      if (posRes.data) setPositions(posRes.data as PlantPos[])
       setLoading(false)
     }
     fetchData()
   }, [areaId])
 
-  // EXCEL_PLANTSの名前（例: "ホトトギス(L)"）とDBの植物を2段階マッチングで紐づける
-  // Step1: 完全一致を優先して確定
-  // Step2: 未マッチ植物に対してサフィックス除去でフォールバック（使用済みDBレコードは除外）
-  const excelNameToPlant = useMemo(() => {
+  // plant_positions の名前と plants テーブルの名前を2段階マッチングで紐づける
+  // Step1: 完全一致を優先
+  // Step2: サフィックス（(1)(2)(L)等）除去後のマッチ（未使用DBレコードのみ対象）
+  //        数字サフィックスの場合は名前順に処理し、同名植物を順番に割り当てる
+  const posNameToPlant = useMemo(() => {
     const result = new Map<string, Plant>()
     const usedIds = new Set<number>()
 
     // Step1: 完全一致
-    for (const pos of excelPositions) {
+    for (const pos of positions) {
       const plant = plants.find((p) => p.name === pos.name && !usedIds.has(p.id))
       if (plant) {
         result.set(pos.name, plant)
@@ -86,24 +84,29 @@ export default function AreaDetailPage({
       }
     }
 
-    // Step2: サフィックス除去マッチ（未マッチのEXCEL名のみ）
-    for (const pos of excelPositions) {
-      if (result.has(pos.name)) continue
+    // Step2: サフィックス除去マッチ（名前順にソートして (1)(2) の順序を保証）
+    const unmatched = positions.filter((p) => !result.has(p.name))
+    unmatched.sort((a, b) => a.name.localeCompare(b.name, "ja"))
+
+    for (const pos of unmatched) {
       const base = pos.name.replace(/\s*\([^)]*\)\s*$/, "").trim()
       if (base === pos.name) continue
-      // 未使用のDBレコードの中でbase名が1件だけの場合のみマッチ
-      const candidates = plants.filter((p) => p.name === base && !usedIds.has(p.id))
-      if (candidates.length === 1) {
+
+      const candidates = plants
+        .filter((p) => p.name === base && !usedIds.has(p.id))
+        .sort((a, b) => (a.plant_no ?? 999) - (b.plant_no ?? 999))
+
+      if (candidates.length >= 1) {
         result.set(pos.name, candidates[0])
         usedIds.add(candidates[0].id)
       }
     }
 
     return result
-  }, [plants, excelPositions])
+  }, [plants, positions])
 
-  const getPlantId = (name: string) => excelNameToPlant.get(name)?.id
-  const getPlantNo = (name: string) => excelNameToPlant.get(name)?.plant_no ?? null
+  const getPlantId = (name: string) => posNameToPlant.get(name)?.id
+  const getPlantNo = (name: string) => posNameToPlant.get(name)?.plant_no ?? null
 
   return (
     <div className="min-h-dvh">
@@ -148,13 +151,13 @@ export default function AreaDetailPage({
         </div>
       ) : (
         <>
-          {/* SVG配置マップ（EXCEL_PLANTSデータ使用・自動スケーリング） */}
-          {excelPositions.length > 0 && (() => {
+          {/* SVG配置マップ（plant_positionsテーブルから取得・自動スケーリング） */}
+          {positions.length > 0 && (() => {
             const PAD = 16
             const W = 320
             const H = 200
-            const xs = excelPositions.map((p) => p.x)
-            const ys = excelPositions.map((p) => p.y)
+            const xs = positions.map((p) => p.x)
+            const ys = positions.map((p) => p.y)
             const minX = Math.min(...xs)
             const maxX = Math.max(...xs)
             const minY = Math.min(...ys)
@@ -182,7 +185,7 @@ export default function AreaDetailPage({
                     aria-label={`エリア${areaId} 植物配置図`}
                   >
                     <rect width={W} height={H} fill="rgba(29,158,117,0.05)" rx="6" />
-                    {excelPositions.map((pos) => {
+                    {positions.map((pos, idx) => {
                       const { x, y } = toSvg(pos.x, pos.y)
                       const isSelected = selectedPlant === pos.name
                       const plantNo = getPlantNo(pos.name)
@@ -191,7 +194,7 @@ export default function AreaDetailPage({
                       const fontSize = noStr.length >= 3 ? 5 : noStr.length === 2 ? 6 : 7
                       return (
                         <g
-                          key={pos.id}
+                          key={`${pos.name}-${idx}`}
                           onClick={() => setSelectedPlant(isSelected ? null : pos.name)}
                           style={{ cursor: "pointer" }}
                         >
