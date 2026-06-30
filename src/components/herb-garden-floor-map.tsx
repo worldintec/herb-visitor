@@ -563,11 +563,6 @@ export default function HerbGardenFloorMap() {
         </div>
       )}
 
-      {plots.length === 0 && (
-        <p className="text-xs text-center text-gray-400 py-2">
-          プロットはまだ登録されていません
-        </p>
-      )}
 
     </div>
   )
