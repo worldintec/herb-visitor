@@ -76,6 +76,11 @@ export default function AreaDetailPage({
     return p?.id
   }
 
+  // name → plant_no map for markers
+  const plantNoMap = Object.fromEntries(
+    plants.filter((p) => p.plant_no != null).map((p) => [p.name, p.plant_no])
+  )
+
   return (
     <div className="min-h-dvh">
       {/* Header */}
@@ -156,40 +161,56 @@ export default function AreaDetailPage({
                     {excelPositions.map((pos) => {
                       const { x, y } = toSvg(pos.x, pos.y)
                       const isSelected = selectedPlant === pos.name
+                      const plantNo = plantNoMap[pos.name]
+                      const noStr = plantNo != null ? String(plantNo) : ""
+                      const r = isSelected ? 10 : 8
+                      const fontSize = noStr.length >= 3 ? 5 : noStr.length === 2 ? 6 : 7
                       return (
                         <g
                           key={pos.id}
                           onClick={() => setSelectedPlant(isSelected ? null : pos.name)}
                           style={{ cursor: "pointer" }}
                         >
-                          <title>{pos.name}</title>
+                          <title>{noStr ? `No.${noStr} ${pos.name}` : pos.name}</title>
                           {isSelected && (
-                            <circle cx={x} cy={y} r={14} fill="#1D9E75" fillOpacity={0.15} />
+                            <circle cx={x} cy={y} r={r + 6} fill="#1D9E75" fillOpacity={0.15} />
                           )}
                           <circle
                             cx={x} cy={y}
-                            r={isSelected ? 8 : 6}
+                            r={r}
                             fill={isSelected ? "#1D9E75" : "#34C896"}
                             stroke="white"
                             strokeWidth={1.5}
                           />
+                          {noStr && (
+                            <text
+                              x={x} y={y + fontSize * 0.4}
+                              textAnchor="middle"
+                              fontSize={fontSize}
+                              fill="white"
+                              fontWeight="700"
+                              className="pointer-events-none select-none"
+                            >
+                              {noStr}
+                            </text>
+                          )}
                           {isSelected && (
                             <>
                               <rect
-                                x={x - 28} y={y - 18}
-                                width="56" height="12"
+                                x={x - 32} y={y - r - 14}
+                                width="64" height="12"
                                 rx="3"
                                 fill="rgba(15,60,40,0.85)"
                               />
                               <text
-                                x={x} y={y - 9}
+                                x={x} y={y - r - 5}
                                 textAnchor="middle"
                                 fontSize={8}
                                 fill="white"
                                 fontWeight="600"
                                 className="pointer-events-none select-none"
                               >
-                                {pos.name.length > 8 ? pos.name.slice(0, 7) + "…" : pos.name}
+                                {noStr ? `No.${noStr} ` : ""}{pos.name.length > 7 ? pos.name.slice(0, 6) + "…" : pos.name}
                               </text>
                             </>
                           )}
@@ -203,7 +224,12 @@ export default function AreaDetailPage({
                         href={`/plants/${getPlantId(selectedPlant) || ""}`}
                         className="flex items-center justify-between p-2 rounded-xl bg-green-50 text-sm"
                       >
-                        <span className="font-medium">{selectedPlant}</span>
+                        <span className="font-medium">
+                          {plantNoMap[selectedPlant] != null && (
+                            <span className="text-herb-primary mr-1">No.{plantNoMap[selectedPlant]}</span>
+                          )}
+                          {selectedPlant}
+                        </span>
                         <span className="text-herb-primary text-xs">詳細を見る →</span>
                       </Link>
                     </div>
