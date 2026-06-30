@@ -70,16 +70,22 @@ export default function AreaDetailPage({
     fetchData()
   }, [areaId])
 
+  // EXCEL_PLANTSの名前（例: "ホトトギス(L)"）からDBの植物を探す
+  // 完全一致 → サフィックス除去後の一致 の順でフォールバック
+  const stripSuffix = (name: string) => name.replace(/\s*\([^)]*\)\s*$/, "").trim()
+
+  const findPlant = (name: string) =>
+    plants.find((pl) => pl.name === name) ??
+    plants.find((pl) => pl.name === stripSuffix(name))
+
   // Find plant ID by name
-  const getPlantId = (name: string) => {
-    const p = plants.find((pl) => pl.name === name)
-    return p?.id
-  }
+  const getPlantId = (name: string) => findPlant(name)?.id
 
   // name → plant_no map for markers
-  const plantNoMap = Object.fromEntries(
-    plants.filter((p) => p.plant_no != null).map((p) => [p.name, p.plant_no])
-  )
+  const getPlantNo = (name: string) => {
+    const p = findPlant(name)
+    return p?.plant_no ?? null
+  }
 
   return (
     <div className="min-h-dvh">
@@ -161,7 +167,7 @@ export default function AreaDetailPage({
                     {excelPositions.map((pos) => {
                       const { x, y } = toSvg(pos.x, pos.y)
                       const isSelected = selectedPlant === pos.name
-                      const plantNo = plantNoMap[pos.name]
+                      const plantNo = getPlantNo(pos.name)
                       const noStr = plantNo != null ? String(plantNo) : ""
                       const r = isSelected ? 10 : 8
                       const fontSize = noStr.length >= 3 ? 5 : noStr.length === 2 ? 6 : 7
@@ -225,8 +231,8 @@ export default function AreaDetailPage({
                         className="flex items-center justify-between p-2 rounded-xl bg-green-50 text-sm"
                       >
                         <span className="font-medium">
-                          {plantNoMap[selectedPlant] != null && (
-                            <span className="text-herb-primary mr-1">No.{plantNoMap[selectedPlant]}</span>
+                          {getPlantNo(selectedPlant) != null && (
+                            <span className="text-herb-primary mr-1">No.{getPlantNo(selectedPlant)}</span>
                           )}
                           {selectedPlant}
                         </span>
