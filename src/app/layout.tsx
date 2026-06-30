@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "見沼氷川公園ハーブ園の植物ガイド。園内のハーブを写真付きで紹介します。",
   icons: {
     icon: "/favicon.ico",
-    apple: "/icons/icon-192.svg",
+    apple: "/icons/icon.png",
   },
   manifest: "/manifest.json",
   appleWebApp: {
