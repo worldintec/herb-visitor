@@ -26,6 +26,10 @@ export default function AreaDetailPage({
   const excelPositions = EXCEL_PLANTS.filter((p) => p.area === areaId)
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
+  useEffect(() => {
     async function fetchData() {
       const [plantsRes] = await Promise.all([
         supabase
