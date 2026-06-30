@@ -10,7 +10,6 @@ export const metadata: Metadata = {
     "見沼氷川公園ハーブ園の植物ガイド。園内のハーブを写真付きで紹介します。",
   icons: {
     icon: "/favicon.ico",
-    apple: "/icons/apple-touch-icon.png",
   },
   manifest: "/manifest.json",
   appleWebApp: {
@@ -39,7 +38,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="min-h-dvh font-sans antialiased">
         <div
