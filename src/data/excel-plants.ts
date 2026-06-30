@@ -82,7 +82,7 @@ export const EXCEL_PLANTS = [
   { id:"txt_J_75", name:"メキシカンブッシュセージ(J)",area:"J",x:463.87,y:446.31},
   { id:"txt_J_76", name:"ベルガモット(J)",         area:"J", x:473.17, y:452.19 },
   { id:"txt_K_77", name:"ロウバイ",                area:"K", x:527.24, y:275.01 },
-  { id:"txt_K_78", name:"オミエナシ",              area:"K", x:541.28, y:256.69 },
+  { id:"txt_K_78", name:"オミナエシ",              area:"K", x:541.28, y:256.69 },
   { id:"txt_K_79", name:"シオン",                  area:"K", x:566.56, y:244.56 },
   { id:"txt_K_80", name:"ビワ",                    area:"K", x:588.22, y:236.96 },
   { id:"txt_K_81", name:"レオノチスセージ",        area:"K", x:589.35, y:245.62 },
