@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect, use, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Leaf, MapPin } from "lucide-react"
@@ -70,23 +70,40 @@ export default function AreaDetailPage({
     fetchData()
   }, [areaId])
 
-  // EXCEL_PLANTSの名前（例: "ホトトギス(L)"）からDBの植物を探す
-  // 完全一致 → エリア記号サフィックス(A-P)除去後の一致 の順でフォールバック
-  // ※ "(2)"や"(W)"など非エリア記号は除去しない（誤マッチ防止）
-  const stripSuffix = (name: string) => name.replace(/\s*\([A-P]\d*\)\s*$/, "").trim()
+  // EXCEL_PLANTSの名前（例: "ホトトギス(L)"）とDBの植物を2段階マッチングで紐づける
+  // Step1: 完全一致を優先して確定
+  // Step2: 未マッチ植物に対してサフィックス除去でフォールバック（使用済みDBレコードは除外）
+  const excelNameToPlant = useMemo(() => {
+    const result = new Map<string, Plant>()
+    const usedIds = new Set<number>()
 
-  const findPlant = (name: string) =>
-    plants.find((pl) => pl.name === name) ??
-    plants.find((pl) => pl.name === stripSuffix(name))
+    // Step1: 完全一致
+    for (const pos of excelPositions) {
+      const plant = plants.find((p) => p.name === pos.name && !usedIds.has(p.id))
+      if (plant) {
+        result.set(pos.name, plant)
+        usedIds.add(plant.id)
+      }
+    }
 
-  // Find plant ID by name
-  const getPlantId = (name: string) => findPlant(name)?.id
+    // Step2: サフィックス除去マッチ（未マッチのEXCEL名のみ）
+    for (const pos of excelPositions) {
+      if (result.has(pos.name)) continue
+      const base = pos.name.replace(/\s*\([^)]*\)\s*$/, "").trim()
+      if (base === pos.name) continue
+      // 未使用のDBレコードの中でbase名が1件だけの場合のみマッチ
+      const candidates = plants.filter((p) => p.name === base && !usedIds.has(p.id))
+      if (candidates.length === 1) {
+        result.set(pos.name, candidates[0])
+        usedIds.add(candidates[0].id)
+      }
+    }
 
-  // name → plant_no map for markers
-  const getPlantNo = (name: string) => {
-    const p = findPlant(name)
-    return p?.plant_no ?? null
-  }
+    return result
+  }, [plants, excelPositions])
+
+  const getPlantId = (name: string) => excelNameToPlant.get(name)?.id
+  const getPlantNo = (name: string) => excelNameToPlant.get(name)?.plant_no ?? null
 
   return (
     <div className="min-h-dvh">
