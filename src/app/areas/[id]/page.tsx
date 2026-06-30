@@ -71,8 +71,9 @@ export default function AreaDetailPage({
   }, [areaId])
 
   // EXCEL_PLANTSの名前（例: "ホトトギス(L)"）からDBの植物を探す
-  // 完全一致 → サフィックス除去後の一致 の順でフォールバック
-  const stripSuffix = (name: string) => name.replace(/\s*\([^)]*\)\s*$/, "").trim()
+  // 完全一致 → エリア記号サフィックス(A-P)除去後の一致 の順でフォールバック
+  // ※ "(2)"や"(W)"など非エリア記号は除去しない（誤マッチ防止）
+  const stripSuffix = (name: string) => name.replace(/\s*\([A-P]\d*\)\s*$/, "").trim()
 
   const findPlant = (name: string) =>
     plants.find((pl) => pl.name === name) ??
