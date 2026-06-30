@@ -118,6 +118,8 @@ function LoginPageInner() {
         setSubmitting(false)
         return
       }
+      // タブ生存フラグを立てる（useAutoLogout でタブ閉じ検知に使用）
+      sessionStorage.setItem("session_tab", "1")
       // router.push はCookie反映前にRSCリクエストを発行するレースが発生し、
       // 初回ログインが固まったように見える原因になるためフルページ遷移にする
       window.location.href = redirect

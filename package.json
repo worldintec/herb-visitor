@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
+    "web-push": "^3.6.7",
     "@supabase/supabase-js": "^2.101.1",
     "@types/nodemailer": "^8.0.1",
     "bcryptjs": "^3.0.3",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/web-push": "^3.3.4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",

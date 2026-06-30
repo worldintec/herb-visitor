@@ -2,12 +2,22 @@ import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import VisitorNav from "@/components/visitor-nav"
 import AutoLogoutProvider from "@/components/auto-logout-provider"
+import SwRegister from "@/components/sw-register"
 
 export const metadata: Metadata = {
   title: "見沼氷川公園 ハーブ園ガイド",
   description:
     "見沼氷川公園ハーブ園の植物ガイド。園内のハーブを写真付きで紹介します。",
-  icons: { icon: "/favicon.ico" },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icons/icon-192.svg",
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ハーブ園ガイド",
+  },
 }
 
 export const viewport: Viewport = {
@@ -39,6 +49,7 @@ export default function RootLayout({
         </div>
         <VisitorNav />
         <AutoLogoutProvider />
+        <SwRegister />
       </body>
     </html>
   )
