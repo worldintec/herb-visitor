@@ -35,6 +35,9 @@ export default function StaffNewsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [notifyResult, setNotifyResult] = useState<{ sent: number; removed: number } | null>(
+    null
+  )
 
   useEffect(() => {
     fetch("/api/staff/me")
@@ -81,6 +84,7 @@ export default function StaffNewsPage() {
 
   const resetForm = () => {
     setEditingId(null)
+    setNotifyResult(null)
     setCategory("お知らせ")
     setTitle("")
     setSummary("")
@@ -94,6 +98,7 @@ export default function StaffNewsPage() {
     if (!title.trim()) return
     setSubmitting(true)
     setSubmitError(null)
+    setNotifyResult(null)
     try {
       const res = await fetch(editingId ? `/api/staff/news/${editingId}` : "/api/staff/news", {
         method: editingId ? "PATCH" : "POST",
@@ -119,6 +124,8 @@ export default function StaffNewsPage() {
         )
       )
       resetForm()
+      // resetForm が通知結果を消すため、その後に設定する
+      setNotifyResult(json.notification ?? null)
     } catch {
       setSubmitError("通信エラーが発生しました")
     } finally {
@@ -135,6 +142,7 @@ export default function StaffNewsPage() {
     setBody(item.body)
     setIsPublished(item.is_published)
     setSubmitError(null)
+    setNotifyResult(null)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
@@ -249,7 +257,20 @@ export default function StaffNewsPage() {
             公開する（来園者向け /news に表示）
           </label>
 
+          <p className="text-xs text-slate-500 leading-relaxed">
+            {editingId
+              ? "編集ではプッシュ通知は送信されません。"
+              : "「公開する」にチェックを入れて登録すると、プッシュ通知も同時に送信されます。"}
+          </p>
+
           {submitError && <p className="text-red-500 text-sm">{submitError}</p>}
+
+          {notifyResult && (
+            <p className="text-green-700 text-sm">
+              プッシュ通知を {notifyResult.sent}件に送信しました
+              {notifyResult.removed > 0 && `（無効な購読 ${notifyResult.removed}件を削除）`}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button

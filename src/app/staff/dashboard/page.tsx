@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { Search, ShieldCheck, LogOut, KeyRound, Copy, Check, Bell, Megaphone } from "lucide-react"
+import { Search, ShieldCheck, LogOut, KeyRound, Copy, Check, Megaphone } from "lucide-react"
 
 interface StaffUser {
   id: string
@@ -25,12 +25,6 @@ export default function StaffDashboardPage() {
   const [issuedFor, setIssuedFor] = useState<{ userCode: string; tempPassword: string } | null>(null)
   const [issueError, setIssueError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-
-  const [notifTitle, setNotifTitle] = useState("")
-  const [notifBody, setNotifBody] = useState("")
-  const [sending, setSending] = useState(false)
-  const [sendResult, setSendResult] = useState<{ sent: number; removed: number } | null>(null)
-  const [sendError, setSendError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/staff/me")
@@ -71,33 +65,6 @@ export default function StaffDashboardPage() {
       setSearching(false)
     }
   }, [query])
-
-  const handleSendNotification = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!notifTitle.trim()) return
-    setSending(true)
-    setSendError(null)
-    setSendResult(null)
-    try {
-      const res = await fetch("/api/staff/send-notification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: notifTitle.trim(), body: notifBody.trim() }),
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        setSendError(json.error || "送信に失敗しました")
-        return
-      }
-      setSendResult({ sent: json.sent, removed: json.removed })
-      setNotifTitle("")
-      setNotifBody("")
-    } catch {
-      setSendError("通信エラーが発生しました")
-    } finally {
-      setSending(false)
-    }
-  }
 
   const handleLogout = async () => {
     await fetch("/api/staff/logout", { method: "POST" })
@@ -179,10 +146,15 @@ export default function StaffDashboardPage() {
       <div className="px-4 sm:px-8 py-6 space-y-4">
         <Link
           href="/staff/news"
-          className="flex items-center gap-2 bg-white rounded-xl p-4 shadow-sm border border-slate-200 text-slate-800 font-semibold text-sm active:scale-[0.98] transition-transform"
+          className="flex items-center gap-3 bg-white rounded-xl p-4 shadow-sm border-2 border-herb-primary text-slate-800 active:scale-[0.98] transition-transform"
         >
-          <Megaphone size={18} className="text-herb-primary" />
-          お知らせ管理
+          <Megaphone size={22} className="text-herb-primary flex-shrink-0" />
+          <span className="min-w-0">
+            <span className="block font-semibold text-sm">お知らせ管理</span>
+            <span className="block text-xs text-slate-500 mt-0.5">
+              お知らせの登録・編集と、来園者へのプッシュ通知の配信
+            </span>
+          </span>
         </Link>
 
         <form onSubmit={handleSearch} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 space-y-3">
@@ -238,40 +210,6 @@ export default function StaffDashboardPage() {
           <p className="text-center text-slate-400 text-sm py-4">該当するユーザーが見つかりませんでした</p>
         )}
 
-        <form onSubmit={handleSendNotification} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 space-y-3">
-          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-            <Bell size={14} />
-            お知らせ配信
-          </label>
-          <input
-            type="text"
-            value={notifTitle}
-            onChange={(e) => setNotifTitle(e.target.value)}
-            placeholder="タイトル（必須）"
-            className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-slate-500"
-          />
-          <textarea
-            value={notifBody}
-            onChange={(e) => setNotifBody(e.target.value)}
-            placeholder="本文（任意）"
-            rows={6}
-            className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-slate-500 resize-none"
-          />
-          {sendError && <p className="text-red-500 text-sm">{sendError}</p>}
-          {sendResult && (
-            <p className="text-green-700 text-sm">
-              {sendResult.sent}件に送信しました
-              {sendResult.removed > 0 && `（無効な購読 ${sendResult.removed}件を削除）`}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={sending || !notifTitle.trim()}
-            className="w-full h-10 rounded-lg bg-slate-800 text-white text-sm font-semibold disabled:opacity-50"
-          >
-            {sending ? "送信中..." : "送信する"}
-          </button>
-        </form>
       </div>
 
       {confirmTarget && (

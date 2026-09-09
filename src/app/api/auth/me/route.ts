@@ -18,7 +18,7 @@ export async function GET() {
   const supabase = getSupabase()
   const { data: user } = await supabase
     .from("users")
-    .select("password_reset_required, notify_news")
+    .select("password_reset_required")
     .eq("id", session.userId)
     .maybeSingle()
 
@@ -26,7 +26,6 @@ export async function GET() {
     user: {
       userCode: session.userCode,
       mustChangePassword: !!user?.password_reset_required,
-      notifyNews: user?.notify_news ?? true,
     },
   })
 }
