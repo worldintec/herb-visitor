@@ -73,7 +73,7 @@ export default function AreaDetailPage({
   //        数字サフィックスの場合は名前順に処理し、同名植物を順番に割り当てる
   const posNameToPlant = useMemo(() => {
     const result = new Map<string, Plant>()
-    const usedIds = new Set<number>()
+    const usedIds = new Set<string>()
 
     // Step1: 完全一致
     for (const pos of positions) {

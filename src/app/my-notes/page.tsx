@@ -27,7 +27,7 @@ export default function MyNotesPage() {
   const router = useRouter()
   const [notes, setNotes] = useState<VisitorNote[]>([])
   const [loading, setLoading] = useState(true)
-  const [deleting, setDeleting] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
 
   async function handleLogout() {
@@ -66,7 +66,7 @@ export default function MyNotesPage() {
     setLoading(false)
   }
 
-  async function handleDelete(noteId: number) {
+  async function handleDelete(noteId: string) {
     if (!confirm("このノートを削除しますか？")) return
     setDeleting(noteId)
 

@@ -10,7 +10,7 @@ export interface MapPlot {
 }
 
 export interface Plant {
-  id: number
+  id: string
   name: string
   area: string
   plant_no: number | null
@@ -42,9 +42,9 @@ export interface PlantPosition {
 }
 
 export interface VisitorNote {
-  id: number
+  id: string
   session_id: string
-  plant_id: number | null
+  plant_id: string | null
   plant_name: string | null
   note_text: string
   photo_path: string | null

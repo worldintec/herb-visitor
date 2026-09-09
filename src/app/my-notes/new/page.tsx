@@ -179,7 +179,7 @@ function NewNoteContent() {
 
       const noteData = {
         session_id: sessionId,
-        plant_id: selectedPlantId ? parseInt(selectedPlantId) : null,
+        plant_id: selectedPlantId || null,
         plant_name: selectedPlantName || null,
         note_text: noteText.trim(),
         photo_path: photoPath,
