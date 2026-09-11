@@ -10,7 +10,9 @@ import {
   Bell,
   User,
   KeyRound,
-  Sparkles,
+  UserPlus,
+  BookOpen,
+  Camera,
   ChevronDown,
   ChevronRight,
   Image as ImageIcon,
@@ -24,7 +26,9 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   news: Bell,
   mypage: User,
   account: KeyRound,
-  more: Sparkles,
+  register: UserPlus,
+  notes: BookOpen,
+  photos: Camera,
 }
 
 export default function GuidePage() {
@@ -74,11 +78,6 @@ export default function GuidePage() {
                 <h3 className="flex-1 font-semibold text-sm text-herb-text">
                   {section.title}
                 </h3>
-                {section.comingSoon && (
-                  <span className="text-[10px] font-medium text-herb-text-secondary bg-herb-bg rounded-sm px-2 py-0.5">
-                    準備中
-                  </span>
-                )}
                 <ChevronDown
                   size={18}
                   className={`text-herb-text-secondary transition-transform ${
@@ -147,22 +146,6 @@ export default function GuidePage() {
                         </p>
                       ))}
                     </div>
-                  )}
-
-                  {section.comingSoonItems && section.comingSoonItems.length > 0 && (
-                    <ul className="space-y-1.5">
-                      {section.comingSoonItems.map((item, i) => (
-                        <li
-                          key={i}
-                          className="flex items-center justify-between bg-herb-bg rounded-lg px-3 py-2 text-xs text-herb-text-secondary"
-                        >
-                          <span>{item}</span>
-                          <span className="text-[10px] font-medium text-herb-text-secondary/70">
-                            準備中
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
                   )}
 
                   {section.links && section.links.length > 0 && (

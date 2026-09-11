@@ -19,8 +19,6 @@ export interface GuideSection {
   imageWidth?: number // next/image用の実画像サイズ（アスペクト比維持に使用）
   imageHeight?: number
   imageCaption?: string
-  comingSoon?: boolean // 「準備中」セクション
-  comingSoonItems?: string[] // 準備中セクション内に並べる今後の追加予定項目
 }
 
 export const GUIDE_INTRO_TEXT =
@@ -49,6 +47,9 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     imageSrc: "/images/guide/guide_search_screenshot.jpg",
     imageAlt:
       "検索画面（ハーブ一覧）のスクリーンショット。検索窓右のハートとカード右上のハートの位置に注釈つき",
+    // 差し替え手順: public/images/guide/guide_search_screenshot.jpg を新しい画像で
+    //   上書きし、imageWidth / imageHeight を新しい画像の実寸に合わせて更新する。
+    //   （現在の画像は登録数が「137種」表記のため、145種の画面に差し替えが必要）
     imageWidth: 739,
     imageHeight: 1790,
     // TODO: 和名／学名の両対応や読み仮名検索など、検索仕様の拡張予定があれば
@@ -64,12 +65,15 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "指2本でピンチすると拡大・縮小、ダブルタップでも拡大できます。",
     ],
     tips: [
-      "オレンジ色の小さな点は、各ハーブのおおよその位置を示す目安です。",
+      "配置図の小さな点は、各植物のおおよその位置を示す目安です。",
+      "点の色は植物の種類を表します。緑はハーブ、ピンクは花、青は樹木です。",
     ],
     links: [{ href: "/areas", label: "マップを開く" }],
     showImagePlaceholder: true,
     imageSrc: "/images/guide/guide_map_screenshot.jpg",
     imageAlt: "マップ画面（エリアマップ）のスクリーンショット",
+    // 差し替え手順: public/images/guide/guide_map_screenshot.jpg を新しい画像で
+    //   上書きし、imageWidth / imageHeight を新しい画像の実寸に合わせて更新する。
     imageWidth: 739,
     imageHeight: 860,
     imageCaption: "マップ画面（エリアマップ）のスクリーンショット",
@@ -118,16 +122,82 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     links: [{ href: "/forgot-password", label: "パスワードの再発行についてはこちら" }],
   },
   {
-    id: "more",
-    title: "その他",
-    lead: "会員登録の方法や投稿方法など、その他の使い方は準備中です。",
-    body: [],
-    comingSoon: true,
-    comingSoonItems: [
-      "会員登録の方法",
-      "マイノートの使い方",
-      "写真の投稿方法",
+    id: "register",
+    title: "会員登録の方法",
+    lead:
+      "ノート機能や写真の投稿をご利用いただくには、会員登録が必要です。メールアドレスや電話番号は登録しません。",
+    body: [
+      "ログイン画面の下部にある「アカウントをお持ちでない方は 新規登録」から、登録画面に進みます。",
+      "IDとパスワードを決めて入力します。どちらも英数字8〜16文字です。",
+      "入力間違いを防ぐため、パスワードは確認用にもう一度入力します。",
+      "利用規約をお読みのうえ、「上記の利用規約を読み、内容に同意します。」にチェックを入れてください。",
+      "「登録する」をタップすると登録が完了し、そのままログインした状態になります。",
     ],
-    // TODO: 内容が確定した項目から、通常セクションと同じ形式で追加していく。
+    tips: [
+      "メールアドレスや電話番号は登録しません。そのため、IDを忘れた場合はお調べすることができません。お手数ですが再度ご登録をお願いいたします。",
+      "パスワードを忘れた場合は、見沼氷川公園管理棟の窓口までお越しください。職員が本人確認のうえ、仮パスワードをお渡しします。",
+    ],
+    links: [{ href: "/register", label: "新規登録画面を開く" }],
+    showImagePlaceholder: true,
+    imageCaption: "新規登録画面のスクリーンショット（準備中）",
+    // TODO: スクリーンショットを public/images/guide/guide_register_screenshot.jpg に
+    //       配置し、下記3行のコメントを外して実寸を設定する。
+    // imageSrc: "/images/guide/guide_register_screenshot.jpg",
+    // imageWidth: 739,
+    // imageHeight: 1600,
+  },
+  {
+    id: "notes",
+    title: "マイノートの使い方",
+    lead:
+      "見かけたハーブの記録を残せます。ご自分だけが見られるノートです。",
+    body: [
+      "画面下の「ノート」タブを開き、右上の「新規作成」から新しい記録を作ります。",
+      "ハーブを選び、訪問日とメモを入力します。メモの入力は必須です。",
+      "ハーブは、名前の一部を入力して候補から選びます（園内に植えられているハーブが対象です）。",
+      "写真も1枚まで添付できます。",
+      "右上の「保存」をタップすると記録されます。",
+      "ハーブの詳細ページの「ノートを書く」から進むと、そのハーブが選ばれた状態で開きます。",
+      "「ノート」の一覧には、新しく作成したものから順に並びます。",
+      "記録の鉛筆アイコンをタップすると、内容を編集できます。",
+      "ゴミ箱アイコンをタップすると、確認のうえ削除できます。",
+    ],
+    tips: [
+      "記録はご自分だけのもので、他の方には表示されません。",
+      "記録はお使いの端末のブラウザごとに保存されます。同じIDでログインしても、別の端末や別のブラウザからは、これまでの記録は表示されません。",
+      "ブラウザの保存データを消去すると、それまでの記録は表示されなくなりますのでご注意ください。",
+    ],
+    links: [{ href: "/my-notes", label: "マイノートを開く" }],
+    showImagePlaceholder: true,
+    imageCaption: "マイノート画面のスクリーンショット（準備中）",
+    // TODO: スクリーンショットを public/images/guide/guide_notes_screenshot.jpg に
+    //       配置し、下記3行のコメントを外して実寸を設定する。
+    // imageSrc: "/images/guide/guide_notes_screenshot.jpg",
+    // imageWidth: 739,
+    // imageHeight: 1600,
+  },
+  {
+    id: "photos",
+    title: "写真の投稿方法",
+    lead: "ノートには、ハーブの写真を1枚添付できます。",
+    body: [
+      "ノートの入力画面を下にスクロールし、「写真」の「写真を追加」をタップします。",
+      "その場で撮影するか、端末に保存された写真から選びます（端末によってはカメラが先に起動します）。",
+      "選んだ写真はその場でプレビューが表示されます。右上の×をタップすると取り消せます。",
+      "写真は自動で圧縮されてから送信されるため、通信量を気にせず投稿できます。",
+      "写真を差し替える場合は、いったん×で取り消してから選び直してください。",
+    ],
+    tips: [
+      "1件のノートに添付できる写真は1枚です。",
+      "投稿した写真はご自分のノートにのみ表示されます。園内での掲示や、他の方への公開は行いません。",
+    ],
+    links: [{ href: "/my-notes/new", label: "ノートを書いてみる" }],
+    showImagePlaceholder: true,
+    imageCaption: "写真を添付した画面のスクリーンショット（準備中）",
+    // TODO: スクリーンショットを public/images/guide/guide_photo_screenshot.jpg に
+    //       配置し、下記3行のコメントを外して実寸を設定する。
+    // imageSrc: "/images/guide/guide_photo_screenshot.jpg",
+    // imageWidth: 739,
+    // imageHeight: 1600,
   },
 ]
