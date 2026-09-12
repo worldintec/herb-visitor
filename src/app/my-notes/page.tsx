@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
@@ -14,7 +14,7 @@ import {
   LogOut,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { getSessionId } from "@/lib/session"
+import { fetchCurrentUser } from "@/lib/current-user"
 import type { VisitorNote } from "@/types/database"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -26,6 +26,7 @@ function getNotePhotoUrl(path: string) {
 export default function MyNotesPage() {
   const router = useRouter()
   const [notes, setNotes] = useState<VisitorNote[]>([])
+  const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -45,26 +46,28 @@ export default function MyNotesPage() {
     }
   }
 
-  useEffect(() => {
-    fetchNotes()
-  }, [])
-
-  async function fetchNotes() {
-    const sessionId = getSessionId()
-    if (!sessionId) {
-      setLoading(false)
+  const fetchNotes = useCallback(async () => {
+    // ノートはアカウント（users.id）に紐づく。未ログインならログイン画面へ。
+    const user = await fetchCurrentUser()
+    if (!user) {
+      router.replace("/login?redirect=/my-notes")
       return
     }
+    setUserId(user.userId)
 
     const { data } = await supabase
       .from("visitor_notes")
       .select("*")
-      .eq("session_id", sessionId)
+      .eq("user_id", user.userId)
       .order("created_at", { ascending: false })
 
     if (data) setNotes(data)
     setLoading(false)
-  }
+  }, [router])
+
+  useEffect(() => {
+    fetchNotes()
+  }, [fetchNotes])
 
   async function handleDelete(noteId: string) {
     if (!confirm("このノートを削除しますか？")) return
@@ -77,7 +80,12 @@ export default function MyNotesPage() {
         .remove([note.photo_path])
     }
 
-    await supabase.from("visitor_notes").delete().eq("id", noteId)
+    // 自分のノートだけを削除対象にする
+    await supabase
+      .from("visitor_notes")
+      .delete()
+      .eq("id", noteId)
+      .eq("user_id", userId)
     setNotes((prev) => prev.filter((n) => n.id !== noteId))
     setDeleting(null)
   }

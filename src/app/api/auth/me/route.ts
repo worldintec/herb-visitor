@@ -24,6 +24,8 @@ export async function GET() {
 
   return NextResponse.json({
     user: {
+      // マイノートをアカウントに紐づけるため、クライアントからも自分の user_id を参照できるようにする
+      userId: session.userId,
       userCode: session.userCode,
       mustChangePassword: !!user?.password_reset_required,
     },

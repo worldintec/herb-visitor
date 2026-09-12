@@ -43,6 +43,8 @@ export interface PlantPosition {
 
 export interface VisitorNote {
   id: string
+  user_id: string | null
+  // 旧方式（端末ごとのlocalStorage ID）。互換のため保存は続けるが絞り込みには使わない
   session_id: string
   plant_id: string | null
   plant_name: string | null

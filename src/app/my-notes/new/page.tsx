@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getSessionId } from "@/lib/session"
+import { fetchCurrentUser } from "@/lib/current-user"
 import type { Plant, VisitorNote } from "@/types/database"
 import imageCompression from "browser-image-compression"
 
@@ -62,11 +63,20 @@ function NewNoteContent() {
   const [existingPhotoPath, setExistingPhotoPath] = useState<string | null>(
     null
   )
+  const [userId, setUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function init() {
+      // ノートはアカウント（users.id）に紐づく。未ログインならログイン画面へ。
+      const user = await fetchCurrentUser()
+      if (!user) {
+        router.replace("/login?redirect=/my-notes/new")
+        return
+      }
+      setUserId(user.userId)
+
       // Fetch all planted plants for the dropdown
       const { data: plantData } = await supabase
         .from("plants")
@@ -76,13 +86,14 @@ function NewNoteContent() {
 
       if (plantData) setPlants(plantData)
 
-      // If editing, fetch existing note
+      // If editing, fetch existing note（自分のノートのみ編集できる）
       if (editId) {
         const { data: note } = await supabase
           .from("visitor_notes")
           .select("*")
           .eq("id", editId)
-          .single()
+          .eq("user_id", user.userId)
+          .maybeSingle()
 
         if (note) {
           setSelectedPlantId(note.plant_id?.toString() || "")
@@ -99,7 +110,7 @@ function NewNoteContent() {
       setLoading(false)
     }
     init()
-  }, [editId])
+  }, [editId, router])
 
   const filteredPlants = plantSearch
     ? plants.filter((p) =>
@@ -150,7 +161,14 @@ function NewNoteContent() {
       return
     }
 
+    if (!userId) {
+      alert("ログインの有効期限が切れました。再度ログインしてください。")
+      router.replace("/login?redirect=/my-notes")
+      return
+    }
+
     setSaving(true)
+    // session_id は互換のため引き続き保存する（絞り込みには user_id を使う）
     const sessionId = getSessionId()
 
     try {
@@ -166,7 +184,7 @@ function NewNoteContent() {
         }
 
         const ext = photoFile.name.split(".").pop() || "jpg"
-        const fileName = `${sessionId}/${Date.now()}.${ext}`
+        const fileName = `${userId}/${Date.now()}.${ext}`
 
         const { error: uploadError } = await supabase.storage
           .from("visitor-notes")
@@ -178,6 +196,7 @@ function NewNoteContent() {
       }
 
       const noteData = {
+        user_id: userId,
         session_id: sessionId,
         plant_id: selectedPlantId || null,
         plant_name: selectedPlantName || null,
@@ -191,6 +210,7 @@ function NewNoteContent() {
             .from("visitor_notes")
             .update({ ...noteData, updated_at: new Date().toISOString() })
             .eq("id", editId)
+            .eq("user_id", userId)
         : await supabase.from("visitor_notes").insert(noteData)
 
       if (result.error) {
@@ -370,7 +390,6 @@ function NewNoteContent() {
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handlePhotoChange}
             className="hidden"
           />
