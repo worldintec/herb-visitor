@@ -86,14 +86,14 @@ function NewNoteContent() {
 
       if (plantData) setPlants(plantData)
 
-      // If editing, fetch existing note（自分のノートのみ編集できる）
+      // If editing, fetch existing note（サーバー側で自分のノートに限定される）
       if (editId) {
-        const { data: note } = await supabase
-          .from("visitor_notes")
-          .select("*")
-          .eq("id", editId)
-          .eq("user_id", user.userId)
-          .maybeSingle()
+        const res = await fetch(`/api/visitor-notes/${editId}`)
+        if (res.status === 401) {
+          router.replace("/login?redirect=/my-notes")
+          return
+        }
+        const note = res.ok ? (await res.json()).note : null
 
         if (note) {
           setSelectedPlantId(note.plant_id?.toString() || "")
@@ -174,15 +174,8 @@ function NewNoteContent() {
     try {
       let photoPath: string | null = existingPhotoPath
 
-      // Upload new photo
+      // Upload new photo（差し替え前の写真の削除はサーバー側で行う）
       if (photoFile) {
-        // Remove old photo if exists
-        if (existingPhotoPath) {
-          await supabase.storage
-            .from("visitor-notes")
-            .remove([existingPhotoPath])
-        }
-
         const ext = photoFile.name.split(".").pop() || "jpg"
         const fileName = `${userId}/${Date.now()}.${ext}`
 
@@ -195,27 +188,33 @@ function NewNoteContent() {
         }
       }
 
+      // 保存はサーバー側（/api/visitor-notes）でセッション検証のうえ行う。
+      // user_id はサーバーがセッションから決めるため送らない。
       const noteData = {
-        user_id: userId,
-        session_id: sessionId,
-        plant_id: selectedPlantId || null,
-        plant_name: selectedPlantName || null,
-        note_text: noteText.trim(),
-        photo_path: photoPath,
-        visit_date: visitDate,
+        sessionId,
+        plantId: selectedPlantId || null,
+        plantName: selectedPlantName || null,
+        noteText: noteText.trim(),
+        photoPath,
+        visitDate,
       }
 
-      const result = editId
-        ? await supabase
-            .from("visitor_notes")
-            .update({ ...noteData, updated_at: new Date().toISOString() })
-            .eq("id", editId)
-            .eq("user_id", userId)
-        : await supabase.from("visitor_notes").insert(noteData)
+      const res = await fetch(
+        editId ? `/api/visitor-notes/${editId}` : "/api/visitor-notes",
+        {
+          method: editId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(noteData),
+        }
+      )
 
-      if (result.error) {
-        console.error("DB save error:", result.error)
-        alert(`保存に失敗しました: ${result.error.message}`)
+      if (res.status === 401) {
+        router.replace("/login?redirect=/my-notes")
+        return
+      }
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: null }))
+        alert(`保存に失敗しました: ${error ?? "時間を置いてお試しください"}`)
         setSaving(false)
         return
       }

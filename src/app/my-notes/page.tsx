@@ -13,8 +13,6 @@ import {
   Leaf,
   LogOut,
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-import { fetchCurrentUser } from "@/lib/current-user"
 import type { VisitorNote } from "@/types/database"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -26,7 +24,6 @@ function getNotePhotoUrl(path: string) {
 export default function MyNotesPage() {
   const router = useRouter()
   const [notes, setNotes] = useState<VisitorNote[]>([])
-  const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -47,21 +44,21 @@ export default function MyNotesPage() {
   }
 
   const fetchNotes = useCallback(async () => {
-    // ノートはアカウント（users.id）に紐づく。未ログインならログイン画面へ。
-    const user = await fetchCurrentUser()
-    if (!user) {
-      router.replace("/login?redirect=/my-notes")
-      return
+    // ノートの読み書きはすべてサーバー側（/api/visitor-notes）で
+    // セッション検証のうえ行う。DBへは直接アクセスしない。
+    try {
+      const res = await fetch("/api/visitor-notes")
+      if (res.status === 401) {
+        router.replace("/login?redirect=/my-notes")
+        return
+      }
+      if (res.ok) {
+        const { notes: data } = await res.json()
+        setNotes(data ?? [])
+      }
+    } catch {
+      // 通信失敗時は空一覧のまま表示する
     }
-    setUserId(user.userId)
-
-    const { data } = await supabase
-      .from("visitor_notes")
-      .select("*")
-      .eq("user_id", user.userId)
-      .order("created_at", { ascending: false })
-
-    if (data) setNotes(data)
     setLoading(false)
   }, [router])
 
@@ -73,20 +70,18 @@ export default function MyNotesPage() {
     if (!confirm("このノートを削除しますか？")) return
     setDeleting(noteId)
 
-    const note = notes.find((n) => n.id === noteId)
-    if (note?.photo_path) {
-      await supabase.storage
-        .from("visitor-notes")
-        .remove([note.photo_path])
+    // 写真の実体もサーバー側で削除される
+    try {
+      const res = await fetch(`/api/visitor-notes/${noteId}`, { method: "DELETE" })
+      if (res.status === 401) {
+        router.replace("/login?redirect=/my-notes")
+        return
+      }
+      if (!res.ok) throw new Error("delete failed")
+      setNotes((prev) => prev.filter((n) => n.id !== noteId))
+    } catch {
+      alert("削除に失敗しました。時間を置いてお試しください。")
     }
-
-    // 自分のノートだけを削除対象にする
-    await supabase
-      .from("visitor_notes")
-      .delete()
-      .eq("id", noteId)
-      .eq("user_id", userId)
-    setNotes((prev) => prev.filter((n) => n.id !== noteId))
     setDeleting(null)
   }
 

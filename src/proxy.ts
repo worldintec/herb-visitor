@@ -19,6 +19,10 @@ const PUBLIC_PATHS = [
   // staff_session による独自認証を行うため、この一般ガードの対象外とする
   "/staff",
   "/api/staff/",
+  // マイノートAPIは各ハンドラ側で getSession() による検証を行い、
+  // 未ログインには 401 を返す。ここでログイン画面へリダイレクトしてしまうと
+  // fetch 側が 401 を受け取れずHTMLを掴んでしまうため対象外とする
+  "/api/visitor-notes",
 ]
 
 export async function proxy(request: NextRequest) {
