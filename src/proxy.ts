@@ -23,6 +23,9 @@ const PUBLIC_PATHS = [
   // 未ログインには 401 を返す。ここでログイン画面へリダイレクトしてしまうと
   // fetch 側が 401 を受け取れずHTMLを掴んでしまうため対象外とする
   "/api/visitor-notes",
+  // 植物写真・観察ノートのAPIも同様に、各ハンドラ側で getSession() を検証する
+  "/api/plant-photos",
+  "/api/plant-notes",
 ]
 
 export async function proxy(request: NextRequest) {

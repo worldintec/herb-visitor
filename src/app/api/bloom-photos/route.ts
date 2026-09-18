@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseAdmin } from "@/lib/supabase-admin"
 
 export const dynamic = "force-dynamic"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
+/**
+ * ログイン画面の背景スライドショー用の開花写真。
+ *
+ * このAPIは proxy.ts の PUBLIC_PATHS に含まれており、未ログインでも叩ける。
+ * ログイン前の画面が使うため、セッション検証は追加しないこと。
+ *
+ * plant_photos は RLS で anon を遮断しているため、anon クライアントでは
+ * 1件も読めない。ここだけ service_role を使う。
+ * 返すのは開花写真のURLと植物名だけに絞り、他の情報は出さない。
+ */
 export async function GET() {
   // try-catch で囲んでエラー詳細を拾う
   try {
+    const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from("plant_photos")
       .select("id, storage_path, plant_name, caption")

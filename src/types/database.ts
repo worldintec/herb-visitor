@@ -26,7 +26,8 @@ export interface Plant {
 }
 
 export interface PlantPhoto {
-  id: number
+  // 実DBは uuid。以前 number と定義されていたのは誤り。
+  id: string
   plant_name: string
   storage_path: string
   caption: string | null

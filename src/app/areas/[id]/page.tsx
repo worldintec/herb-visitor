@@ -40,14 +40,18 @@ export default function AreaDetailPage({
 
         const names = plantsRes.data.map((p) => p.name)
         if (names.length > 0) {
-          const { data: photoData } = await supabase
-            .from("plant_photos")
-            .select("*")
-            .in("plant_name", names)
+          // plant_photos は RLS で anon を遮断しているため API 経由で読む。
+          // 植物名を並べたURLは長くなりすぎるため全件を取得し、手元で絞り込む。
+          const photoRes = await fetch("/api/plant-photos")
+          const { photos: photoData } = photoRes.ok
+            ? await photoRes.json()
+            : { photos: [] as PlantPhoto[] }
+          const nameSet = new Set(names)
+          const scoped = (photoData as PlantPhoto[]).filter((p) => nameSet.has(p.plant_name))
 
-          if (photoData) {
+          if (scoped) {
             const byPlant: Record<string, PlantPhoto[]> = {}
-            for (const photo of photoData) {
+            for (const photo of scoped) {
               if (!byPlant[photo.plant_name]) byPlant[photo.plant_name] = []
               byPlant[photo.plant_name].push(photo)
             }

@@ -60,24 +60,20 @@ export default function PlantDetailPage({
       if (plantData) {
         setPlant(plantData)
 
+        // plant_photos / plant_notes は RLS で anon を遮断しているため API 経由で読む
+        const name = encodeURIComponent(plantData.name)
         const [photoRes, noteRes] = await Promise.all([
-          supabase
-            .from("plant_photos")
-            .select("*")
-            .eq("plant_name", plantData.name)
-            .order("uploaded_at", { ascending: false }),
-          // インプット記録の観察ノートを取得（content と作成日のみ）
-          supabase
-            .from("plant_notes")
-            .select("id, content, author, created_at")
-            .eq("plant_name", plantData.name)
-            .not("content", "is", null)
-            .neq("content", "")
-            .order("created_at", { ascending: false }),
+          fetch(`/api/plant-photos?plantName=${name}`)
+            .then((r) => (r.ok ? r.json() : { photos: [] }))
+            .catch(() => ({ photos: [] })),
+          // インプット記録の観察ノートを取得（content が空のものは除く）
+          fetch(`/api/plant-notes?plantName=${name}&nonEmpty=1`)
+            .then((r) => (r.ok ? r.json() : { notes: [] }))
+            .catch(() => ({ notes: [] })),
         ])
 
-        if (photoRes.data) setPhotos(sortPhotosByPriority(photoRes.data))
-        if (noteRes.data) setNotes(noteRes.data as PlantNote[])
+        if (photoRes.photos) setPhotos(sortPhotosByPriority(photoRes.photos))
+        if (noteRes.notes) setNotes(noteRes.notes as PlantNote[])
       }
       setLoading(false)
     }

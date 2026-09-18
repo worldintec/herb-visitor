@@ -82,15 +82,19 @@ export default function HomePage() {
         setPlants(plantData)
 
         const names = plantData.map((p) => p.name)
-        const { data: photoData } = await supabase
-          .from("plant_photos")
-          .select("*")
-          .in("plant_name", names)
+        // plant_photos は RLS で anon を遮断しているため API 経由で読む。
+        // 植物名を並べたURLは長くなりすぎるため全件を取得し、手元で絞り込む。
+        const photoRes = await fetch("/api/plant-photos")
+        const { photos: photoData } = photoRes.ok
+          ? await photoRes.json()
+          : { photos: [] as PlantPhoto[] }
+        const nameSet = new Set(names)
+        const scoped = (photoData as PlantPhoto[]).filter((p) => nameSet.has(p.plant_name))
 
-        if (photoData) {
+        if (scoped) {
           // 植物ごとに写真を集約し、キャプション優先順位で代表写真を選択
           const photosByPlant: Record<string, PlantPhoto[]> = {}
-          for (const photo of photoData) {
+          for (const photo of scoped) {
             if (!photosByPlant[photo.plant_name]) photosByPlant[photo.plant_name] = []
             photosByPlant[photo.plant_name].push(photo)
           }
