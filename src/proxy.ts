@@ -26,6 +26,9 @@ const PUBLIC_PATHS = [
   // 植物写真・観察ノートのAPIも同様に、各ハンドラ側で getSession() を検証する
   "/api/plant-photos",
   "/api/plant-notes",
+  // 植物マスタのAPIも同様（第11段階）。照合は前方一致だが、
+  // "/api/plant-photos" や "/api/plant-notes" はこの文字列で始まらないため干渉しない。
+  "/api/plants",
 ]
 
 export async function proxy(request: NextRequest) {

@@ -18,7 +18,7 @@ import {
   MapPin,
   MessageCircle,
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { fetchPlant, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { sortPhotosByPriority } from "@/lib/photo-utils"
 import FavoriteButton from "@/components/favorite-button"
@@ -48,14 +48,15 @@ export default function PlantDetailPage({
   const [notes, setNotes] = useState<PlantNote[]>([])
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchData() {
-      const { data: plantData } = await supabase
-        .from("plants")
-        .select("*")
-        .eq("id", id)
-        .single()
+      // plants は RLS で anon を遮断しているため API 経由で読む。
+      // 「見つからない」と「取得に失敗した」を区別する。
+      const result = await fetchPlant(id)
+      setLoadError(result.status === "error" ? PLANTS_LOAD_ERROR : null)
+      const plantData = result.status === "ok" ? result.plant : null
 
       if (plantData) {
         setPlant(plantData)
@@ -97,8 +98,8 @@ export default function PlantDetailPage({
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center p-4">
         <Leaf size={48} className="text-green-200 mb-4" />
-        <p className="text-herb-text-secondary mb-4">
-          ハーブが見つかりませんでした
+        <p className="text-herb-text-secondary mb-4 text-center">
+          {loadError ?? "ハーブが見つかりませんでした"}
         </p>
         <button
           onClick={() => router.back()}

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { getMonth } from "date-fns"
 import { Search, Leaf, MapPin, ChevronRight, Sparkles } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
@@ -50,6 +50,7 @@ export default function HomePage() {
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   // 月をまたいでタブ/PWAを開きっぱなしにしても表示が更新されるよう、
   // レンダー時の決め打ちではなく再表示時に再計算する
   const [currentMonth, setCurrentMonth] = useState(() => getMonth(new Date()) + 1)
@@ -73,10 +74,14 @@ export default function HomePage() {
     async function fetchData() {
       // 植栽マスタを直接カウント（is_planted フィルターは外す）
       // 来園者向けには「植えられているか」=「マスタに登録されているか」で判定
-      const { data: plantData } = await supabase
-        .from("plants")
-        .select("*")
-        .order("created_at", { ascending: false })
+      // plants は RLS で anon を遮断しているため API 経由で読む
+      const plantData = await fetchPlants({ order: "created_at_desc" }).catch((e) => {
+        console.error("plants 取得失敗", e)
+        return null
+      })
+
+      // 取得できなかったときは「0件」に見せず、失敗したことを伝える
+      setLoadError(plantData === null ? PLANTS_LOAD_ERROR : null)
 
       if (plantData) {
         setPlants(plantData)
@@ -233,6 +238,12 @@ export default function HomePage() {
             </div>
           )}
         </section>
+      )}
+
+      {loadError && (
+        <div className="mx-4 mt-4 rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+          {loadError}
+        </div>
       )}
 
       {/* Seasonal Picks */}

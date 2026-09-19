@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { MapPin, Leaf, ChevronRight, Map } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant } from "@/types/database"
 import HerbGardenFloorMap from "@/components/herb-garden-floor-map"
 
@@ -38,14 +38,19 @@ const AREA_NAMES: Record<string, string> = {
 export default function AreasPage() {
   const [plants, setPlants] = useState<Plant[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [view, setView] = useState<"map" | "list">("map")
 
   useEffect(() => {
     async function fetchData() {
-      const { data } = await supabase
-        .from("plants")
-        .select("*")
+      // plants は RLS で anon を遮断しているため API 経由で読む
+      const data = await fetchPlants().catch((e) => {
+        console.error("plants 取得失敗", e)
+        return null
+      })
 
+      // 取得できなかったときは全エリア0件に見せず、失敗したことを伝える
+      setLoadError(data === null ? PLANTS_LOAD_ERROR : null)
       if (data) setPlants(data)
       setLoading(false)
     }
@@ -81,6 +86,12 @@ export default function AreasPage() {
           全{AREAS.length}エリアのハーブ園をご案内します
         </p>
       </div>
+
+      {loadError && (
+        <div className="mx-4 mt-4 rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+          {loadError}
+        </div>
+      )}
 
       {/* View切替タブ */}
       <div className="px-4 pt-4">

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Leaf, MapPin } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
@@ -23,6 +24,7 @@ export default function AreaDetailPage({
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
   const [selectedPlant, setSelectedPlant] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -30,15 +32,23 @@ export default function AreaDetailPage({
 
   useEffect(() => {
     async function fetchData() {
-      const [plantsRes, posRes] = await Promise.all([
-        supabase.from("plants").select("*").eq("area", areaId).order("plant_no"),
+      const [plantsData, posRes] = await Promise.all([
+        // plants は RLS で anon を遮断しているため API 経由で読む。
+        // plant_positions は第12段階の対象なので従来どおり anon で読む。
+        fetchPlants({ area: areaId, order: "area_plant_no" }).catch((e) => {
+          console.error("plants 取得失敗", e)
+          return null
+        }),
         supabase.from("plant_positions").select("name, x, y").eq("area", areaId),
       ])
 
-      if (plantsRes.data) {
-        setPlants(plantsRes.data)
+      // 取得できなかったときは「まだ登録されていません」に見せない
+      setLoadError(plantsData === null ? PLANTS_LOAD_ERROR : null)
 
-        const names = plantsRes.data.map((p) => p.name)
+      if (plantsData) {
+        setPlants(plantsData)
+
+        const names = plantsData.map((p) => p.name)
         if (names.length > 0) {
           // plant_photos は RLS で anon を遮断しているため API 経由で読む。
           // 植物名を並べたURLは長くなりすぎるため全件を取得し、手元で絞り込む。
@@ -311,7 +321,7 @@ export default function AreaDetailPage({
                 <div className="text-center py-12">
                   <Leaf size={32} className="text-green-200 mx-auto mb-2" />
                   <p className="text-herb-text-secondary text-sm">
-                    このエリアにはまだハーブが登録されていません
+                    {loadError ?? "このエリアにはまだハーブが登録されていません"}
                   </p>
                 </div>
               )}

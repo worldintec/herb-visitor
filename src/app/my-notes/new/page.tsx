@@ -13,6 +13,7 @@ import {
   Search,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import { getSessionId } from "@/lib/session"
 import { fetchCurrentUser } from "@/lib/current-user"
 import type { Plant, VisitorNote } from "@/types/database"
@@ -48,6 +49,7 @@ function NewNoteContent() {
   const presetPlantName = searchParams.get("plant_name")
 
   const [plants, setPlants] = useState<Plant[]>([])
+  const [plantsLoadError, setPlantsLoadError] = useState<string | null>(null)
   const [selectedPlantId, setSelectedPlantId] = useState(presetPlantId || "")
   const [selectedPlantName, setSelectedPlantName] = useState(
     presetPlantName || ""
@@ -78,12 +80,14 @@ function NewNoteContent() {
       setUserId(user.userId)
 
       // Fetch all planted plants for the dropdown
-      const { data: plantData } = await supabase
-        .from("plants")
-        .select("*")
-        .eq("is_planted", true)
-        .order("name")
+      // plants は RLS で anon を遮断しているため API 経由で読む
+      const plantData = await fetchPlants({ planted: true, order: "name" }).catch((e) => {
+        console.error("plants 取得失敗", e)
+        return null
+      })
 
+      // 取得できなかったときは選択肢が空のまま黙らせず、失敗したことを伝える
+      setPlantsLoadError(plantData === null ? PLANTS_LOAD_ERROR : null)
       if (plantData) setPlants(plantData)
 
       // If editing, fetch existing note（サーバー側で自分のノートに限定される）
@@ -271,6 +275,11 @@ function NewNoteContent() {
           <label className="text-sm font-semibold mb-2 block">
             ハーブを選択
           </label>
+          {plantsLoadError && (
+            <div className="mb-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
+              {plantsLoadError}
+            </div>
+          )}
           {selectedPlantName ? (
             <div className="flex items-center gap-2 bg-green-50 rounded-xl p-3">
               <Leaf size={16} className="text-herb-primary flex-shrink-0" />

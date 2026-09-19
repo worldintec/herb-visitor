@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { Search, Leaf, MapPin, Filter, Heart, X } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
@@ -14,6 +14,7 @@ export default function PlantsPage() {
   const [plants, setPlants] = useState<Plant[]>([])
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedArea, setSelectedArea] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
@@ -23,11 +24,14 @@ export default function PlantsPage() {
 
   useEffect(() => {
     async function fetchData() {
-      const { data: plantData } = await supabase
-        .from("plants")
-        .select("*")
-        .order("area")
-        .order("name")
+      // plants は RLS で anon を遮断しているため API 経由で読む
+      const plantData = await fetchPlants({ order: "area_name" }).catch((e) => {
+        console.error("plants 取得失敗", e)
+        return null
+      })
+
+      // 取得できなかったときは「該当なし」に見せず、失敗したことを伝える
+      setLoadError(plantData === null ? PLANTS_LOAD_ERROR : null)
 
       if (plantData) {
         setPlants(plantData)
@@ -276,6 +280,10 @@ export default function PlantsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : loadError ? (
+          <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+            {loadError}
           </div>
         ) : filteredPlants.length === 0 ? (
           <div className="text-center py-16">
