@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { UserPlus, ArrowLeft } from "lucide-react"
 import { TERMS_TEXT, TERMS_VERSION } from "@/lib/terms"
+import { safeRedirect } from "@/lib/safe-redirect"
 
 export default function RegisterPage() {
   return (
@@ -16,7 +17,8 @@ export default function RegisterPage() {
 
 function RegisterPageInner() {
   const searchParams = useSearchParams()
-  const redirect = searchParams.get("redirect") || "/"
+  // ログイン画面と同じ検証を通す（判定はlib/safe-redirect.tsの1か所だけ）
+  const redirect = safeRedirect(searchParams.get("redirect"))
   const [userId, setUserId] = useState("")
   const [password, setPassword] = useState("")
   const [passwordConfirm, setPasswordConfirm] = useState("")
@@ -169,7 +171,7 @@ function RegisterPageInner() {
 
           <p className="text-center text-xs text-herb-text-secondary">
             既にアカウントをお持ちの方は{" "}
-            <Link href={`/login${redirect !== "/" ? `?redirect=${redirect}` : ""}`} className="text-herb-primary font-medium">
+            <Link href={`/login${redirect !== "/" ? `?redirect=${encodeURIComponent(redirect)}` : ""}`} className="text-herb-primary font-medium">
               ログイン
             </Link>
           </p>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { User, KeyRound, Bell, LogOut, ChevronRight } from "lucide-react"
+import { toLogin } from "@/lib/login-redirect"
 
 export default function MyPage() {
   const [userCode, setUserCode] = useState<string | null>(null)
@@ -14,7 +15,7 @@ export default function MyPage() {
       .then((r) => r.json())
       .then(({ user }) => {
         if (!user) {
-          window.location.href = "/login"
+          toLogin()
           return
         }
         setUserCode(user.userCode)
@@ -29,7 +30,7 @@ export default function MyPage() {
     } catch {
       // 通信失敗時もリダイレクトは行う
     }
-    sessionStorage.removeItem("session_tab")
+    // 自分でログアウトした場合は戻る先を引き継がない（?redirect= を付けない）
     window.location.href = "/login"
   }
 

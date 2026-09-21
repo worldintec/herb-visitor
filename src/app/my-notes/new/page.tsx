@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { toLogin } from "@/lib/login-redirect"
 import Image from "next/image"
 import {
   ArrowLeft,
@@ -74,7 +75,7 @@ function NewNoteContent() {
       // ノートはアカウント（users.id）に紐づく。未ログインならログイン画面へ。
       const user = await fetchCurrentUser()
       if (!user) {
-        router.replace("/login?redirect=/my-notes/new")
+        toLogin()
         return
       }
       setUserId(user.userId)
@@ -94,7 +95,7 @@ function NewNoteContent() {
       if (editId) {
         const res = await fetch(`/api/visitor-notes/${editId}`)
         if (res.status === 401) {
-          router.replace("/login?redirect=/my-notes")
+          toLogin("/my-notes")
           return
         }
         const note = res.ok ? (await res.json()).note : null
@@ -167,7 +168,7 @@ function NewNoteContent() {
 
     if (!userId) {
       alert("ログインの有効期限が切れました。再度ログインしてください。")
-      router.replace("/login?redirect=/my-notes")
+      toLogin("/my-notes")
       return
     }
 
@@ -213,7 +214,7 @@ function NewNoteContent() {
       )
 
       if (res.status === 401) {
-        router.replace("/login?redirect=/my-notes")
+        toLogin("/my-notes")
         return
       }
       if (!res.ok) {

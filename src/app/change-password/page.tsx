@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { KeyRound } from "lucide-react"
+import { toLogin } from "@/lib/login-redirect"
 
 export default function ChangePasswordPage() {
   const [checking, setChecking] = useState(true)
@@ -15,7 +16,7 @@ export default function ChangePasswordPage() {
       .then((r) => r.json())
       .then(({ user }) => {
         if (!user) {
-          window.location.href = "/login"
+          toLogin()
           return
         }
         setChecking(false)

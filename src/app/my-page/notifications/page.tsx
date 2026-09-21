@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Bell } from "lucide-react"
+import { toLogin } from "@/lib/login-redirect"
 
 export default function MyPageNotificationsPage() {
   const [loading, setLoading] = useState(true)
@@ -12,7 +13,7 @@ export default function MyPageNotificationsPage() {
       .then((r) => r.json())
       .then(({ user }) => {
         if (!user) {
-          window.location.href = "/login"
+          toLogin()
           return
         }
         setLoading(false)

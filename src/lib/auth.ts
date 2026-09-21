@@ -7,9 +7,17 @@ if (!secret) {
 }
 const JWT_SECRET = new TextEncoder().encode(secret)
 const COOKIE_NAME = "session"
-// JWTの有効期限。タブ/ブラウザを閉じるとハートビートが止まり、この期限で自然失効する。
-// ハートビートは HEARTBEAT_INTERVAL_MS ごとに /api/auth/refresh を呼び、トークンを更新する。
-export const JWT_EXPIRY = "30m"
+
+// 来園者のログイン保持期間。JWT と Cookie で同じ長さにする。
+//
+// 以前は30分＋セッションクッキー（ブラウザを閉じると消える）だった。
+// 園内でQRコードを読むたびにログインし直しになるため30日に延ばしている。
+// タブを開いている間は HEARTBEAT_INTERVAL_MS ごとの /api/auth/refresh で
+// 再発行されるので、使い続けているかぎり切れない。
+//
+// 値はこの2つだけを直せば、ログイン・新規登録・再発行のすべてに効く。
+export const JWT_EXPIRY = "30d"
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 
 export interface SessionPayload {
   userId: string
@@ -38,19 +46,27 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
 
 export async function setSessionCookie(token: string) {
   const store = await cookies()
-  // maxAge/expires を指定しないことでセッションクッキーとして発行する。
-  // ブラウザを閉じると自動的に失効する。
+  // maxAge を付けることで、ブラウザやホーム画面のアプリを閉じても残る。
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    maxAge: SESSION_MAX_AGE_SECONDS,
   })
 }
 
 export async function clearSessionCookie() {
   const store = await cookies()
-  store.delete(COOKIE_NAME)
+  // 発行時と同じ属性で上書きして消す。属性が食い違うと消えずに残るため、
+  // path などは setSessionCookie と必ず揃えること。
+  store.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  })
 }
 
 export async function getSession(): Promise<SessionPayload | null> {

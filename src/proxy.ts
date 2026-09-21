@@ -32,7 +32,7 @@ const PUBLIC_PATHS = [
 ]
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  const { pathname, search } = request.nextUrl
 
   // 公開パスはスキップ
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
@@ -43,8 +43,11 @@ export async function proxy(request: NextRequest) {
   const session = token ? await verifySessionToken(token) : null
 
   if (!session) {
+    // 元のページをクエリごと引き継ぐ。これが無いと、QRコードから来た来園者が
+    // ログイン後にホームへ飛ばされ、読み取ったページにたどり着けない。
+    // 受け取る側（ログイン画面）は safeRedirect() で値を検証する。
     const loginUrl = new URL("/login", request.url)
-    loginUrl.searchParams.set("redirect", pathname)
+    loginUrl.searchParams.set("redirect", pathname + search)
     return NextResponse.redirect(loginUrl)
   }
 

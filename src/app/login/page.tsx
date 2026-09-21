@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { LogIn } from "lucide-react"
+import { safeRedirect } from "@/lib/safe-redirect"
 
 // ========== 背景スライドショー ==========
 
@@ -96,7 +97,8 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const searchParams = useSearchParams()
-  const redirect = searchParams.get("redirect") || "/"
+  // 戻り先はQRコードのURLからも来るため、必ず検証を通す（外部サイトへの転送を防ぐ）
+  const redirect = safeRedirect(searchParams.get("redirect"))
   const [userId, setUserId] = useState("")
   const [password, setPassword] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -118,8 +120,6 @@ function LoginPageInner() {
         setSubmitting(false)
         return
       }
-      // タブ生存フラグを立てる（useAutoLogout でタブ閉じ検知に使用）
-      sessionStorage.setItem("session_tab", "1")
       // router.push はCookie反映前にRSCリクエストを発行するレースが発生し、
       // 初回ログインが固まったように見える原因になるためフルページ遷移にする
       window.location.href = json.mustChangePassword ? "/change-password" : redirect
@@ -208,7 +208,7 @@ function LoginPageInner() {
           <p className="text-center text-xs text-herb-text-secondary">
             アカウントをお持ちでない方は{" "}
             <Link
-              href={`/register${redirect !== "/" ? `?redirect=${redirect}` : ""}`}
+              href={`/register${redirect !== "/" ? `?redirect=${encodeURIComponent(redirect)}` : ""}`}
               className="text-herb-primary font-medium"
             >
               新規登録

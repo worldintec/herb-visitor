@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
+import { toLogin } from "@/lib/login-redirect"
 import {
   BookOpen,
   Plus,
@@ -34,8 +35,7 @@ export default function MyNotesPage() {
     try {
       const res = await fetch("/api/auth/logout", { method: "POST" })
       if (!res.ok) throw new Error("logout failed")
-      // localStorage の自動ログアウトキーもクリア
-      try { localStorage.removeItem("lastActivityAt") } catch {}
+      // 自分でログアウトした場合は戻る先を引き継がない（?redirect= を付けない）
       router.replace("/login")
     } catch {
       alert("ログアウトに失敗しました。時間を置いてお試しください。")
@@ -49,7 +49,7 @@ export default function MyNotesPage() {
     try {
       const res = await fetch("/api/visitor-notes")
       if (res.status === 401) {
-        router.replace("/login?redirect=/my-notes")
+        toLogin()
         return
       }
       if (res.ok) {
@@ -60,7 +60,7 @@ export default function MyNotesPage() {
       // 通信失敗時は空一覧のまま表示する
     }
     setLoading(false)
-  }, [router])
+  }, [])
 
   useEffect(() => {
     fetchNotes()
@@ -74,7 +74,7 @@ export default function MyNotesPage() {
     try {
       const res = await fetch(`/api/visitor-notes/${noteId}`, { method: "DELETE" })
       if (res.status === 401) {
-        router.replace("/login?redirect=/my-notes")
+        toLogin()
         return
       }
       if (!res.ok) throw new Error("delete failed")
