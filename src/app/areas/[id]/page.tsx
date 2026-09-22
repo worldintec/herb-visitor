@@ -4,8 +4,8 @@ import { useState, useEffect, use, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Leaf, MapPin } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
+import { fetchPlantPositions, MAP_LOAD_ERROR } from "@/lib/map-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
@@ -25,6 +25,8 @@ export default function AreaDetailPage({
   const [selectedPlant, setSelectedPlant] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // 配置マップの取得失敗。植物リストの表示は続けたいので loadError とは分けて持つ。
+  const [positionsError, setPositionsError] = useState<string | null>(null)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -32,14 +34,16 @@ export default function AreaDetailPage({
 
   useEffect(() => {
     async function fetchData() {
-      const [plantsData, posRes] = await Promise.all([
-        // plants は RLS で anon を遮断しているため API 経由で読む。
-        // plant_positions は第12段階の対象なので従来どおり anon で読む。
+      const [plantsData, posData] = await Promise.all([
+        // plants も plant_positions も RLS で anon を遮断するため API 経由で読む。
         fetchPlants({ area: areaId, order: "area_plant_no" }).catch((e) => {
           console.error("plants 取得失敗", e)
           return null
         }),
-        supabase.from("plant_positions").select("name, x, y").eq("area", areaId),
+        fetchPlantPositions(areaId).catch((e) => {
+          console.error("plant_positions 取得失敗", e)
+          return null
+        }),
       ])
 
       // 取得できなかったときは「まだ登録されていません」に見せない
@@ -75,7 +79,9 @@ export default function AreaDetailPage({
         }
       }
 
-      if (posRes.data) setPositions(posRes.data as PlantPos[])
+      // 取得できなかったときは「配置マップなし」に見せない
+      setPositionsError(posData === null ? MAP_LOAD_ERROR : null)
+      setPositions(posData ?? [])
       setLoading(false)
     }
     fetchData()
@@ -165,8 +171,21 @@ export default function AreaDetailPage({
         </div>
       ) : (
         <>
+          {/* 配置マップの取得に失敗したときは「配置情報なし」と区別して伝える */}
+          {positionsError && (
+            <div className="px-4 pt-4">
+              <h2 className="text-sm font-bold mb-2 flex items-center gap-1.5">
+                <MapPin size={14} className="text-herb-primary" />
+                配置マップ
+              </h2>
+              <div className="bg-white rounded-2xl p-4 shadow-sm text-sm text-gray-500 text-center">
+                {positionsError}
+              </div>
+            </div>
+          )}
+
           {/* SVG配置マップ（plant_positionsテーブルから取得・自動スケーリング） */}
-          {positions.length > 0 && (() => {
+          {!positionsError && positions.length > 0 && (() => {
             const PAD = 16
             const W = 320
             const H = 200

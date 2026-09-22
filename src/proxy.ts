@@ -29,6 +29,12 @@ const PUBLIC_PATHS = [
   // 植物マスタのAPIも同様（第11段階）。照合は前方一致だが、
   // "/api/plant-photos" や "/api/plant-notes" はこの文字列で始まらないため干渉しない。
   "/api/plants",
+  // マップ3テーブルのAPIも同様（第12-1段階）。各ハンドラ側で getSession() を検証し、
+  // 未ログインには 401 を返す。"/api/plant-positions" は "/api/plants" で始まらない
+  // （4文字目以降が "-" と "s" で異なる）ため、上の行とは独立に必要。
+  "/api/map-plots",
+  "/api/zone-offsets",
+  "/api/plant-positions",
 ]
 
 export async function proxy(request: NextRequest) {

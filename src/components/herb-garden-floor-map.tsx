@@ -2,16 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
 import type { MapPlot } from "@/types/database"
-
-// ─── ゾーン定義 ────────────────────────────────────────────────────────────────
-
-const ZONES = [
-  "A","B","C","D","E","F","G","H","I","J","K","L","M",
-  "N","O","P","Q","R","S","T","U","V","W",
-] as const
-type Zone = (typeof ZONES)[number]
+import { fetchMapPlots, fetchZoneOffsets, MAP_LOAD_ERROR } from "@/lib/map-api"
+import { ZONES, type Zone } from "@/lib/zones"
 
 // ─── ZONE_AREAS（herb-gardenのmap-client.tsxと同一の調整済み座標） ─────────────
 const ZONE_AREAS: Record<Zone, { x: number; y: number; w: number; h: number }> = {
@@ -112,6 +105,7 @@ export default function HerbGardenFloorMap() {
   const suppressClickRef = useRef(false)
   const [plots, setPlots] = useState<MapPlot[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [hoveredZone, setHoveredZone] = useState<Zone | null>(null)
   const [hoveredPlot, setHoveredPlot] = useState<string | null>(null)
   const [zoneOffsets, setZoneOffsets] = useState<Record<Zone, { dx: number; dy: number }>>(
@@ -119,22 +113,35 @@ export default function HerbGardenFloorMap() {
   )
 
   useEffect(() => {
+    // map_plots / zone_offsets は RLS で anon を遮断するため API 経由で読む。
+    // 失敗を握りつぶすと、プロットが無い真っさらなマップを正常な表示として
+    // 見せてしまうため、エラーを表示する。
     Promise.all([
-      supabase.from("map_plots").select("*").order("created_at"),
-      supabase.from("zone_offsets").select("*"),
+      fetchMapPlots().catch((e) => {
+        console.error("map_plots 取得失敗", e)
+        return null
+      }),
+      fetchZoneOffsets().catch((e) => {
+        console.error("zone_offsets 取得失敗", e)
+        return null
+      }),
     ]).then(([plotsRes, offsetsRes]) => {
-      if (plotsRes.data) setPlots(plotsRes.data as MapPlot[])
-      if (offsetsRes.data && offsetsRes.data.length > 0) {
-        setZoneOffsets(prev => {
-          const next = { ...prev }
-          offsetsRes.data!.forEach((row: { zone: string; dx: number; dy: number }) => {
-            if (ZONES.includes(row.zone as Zone)) {
-              next[row.zone as Zone] = { dx: row.dx, dy: row.dy }
-            }
-          })
-          return next
-        })
+      if (plotsRes === null || offsetsRes === null) {
+        setLoadError(MAP_LOAD_ERROR)
+        setLoading(false)
+        return
       }
+      setLoadError(null)
+      setPlots(plotsRes)
+      setZoneOffsets(prev => {
+        const next = { ...prev }
+        offsetsRes.forEach(row => {
+          if ((ZONES as readonly string[]).includes(row.zone)) {
+            next[row.zone as Zone] = { dx: row.dx, dy: row.dy }
+          }
+        })
+        return next
+      })
       setLoading(false)
     })
   }, [])
@@ -306,6 +313,14 @@ export default function HerbGardenFloorMap() {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-gray-400">
         読み込み中...
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center py-12 px-4 text-sm text-gray-500 text-center">
+        {loadError}
       </div>
     )
   }

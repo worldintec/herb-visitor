@@ -36,10 +36,18 @@ export interface PlantPhoto {
 }
 
 export interface PlantPosition {
+  /** /api/plant-positions は必ず返す。画面側では使っていないので optional のまま。 */
+  id?: string
   area: string
   name: string
   x: number
   y: number
+}
+
+export interface ZoneOffset {
+  zone: string
+  dx: number
+  dy: number
 }
 
 export interface VisitorNote {
