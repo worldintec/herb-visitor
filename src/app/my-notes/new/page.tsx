@@ -318,7 +318,7 @@ function NewNoteContent() {
 
       <div className="px-4 py-4 space-y-5">
         {photoWarning && (
-          <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+          <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-xl shadow-lg rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 break-words">
             {photoWarning}
             <button
               onClick={() => router.push("/my-notes")}
