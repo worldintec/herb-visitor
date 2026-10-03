@@ -13,12 +13,12 @@ import {
   Leaf,
   Search,
 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import { getSessionId } from "@/lib/session"
 import { fetchCurrentUser } from "@/lib/current-user"
 import type { Plant, VisitorNote } from "@/types/database"
 import imageCompression from "browser-image-compression"
+import { uploadPhotos, describeFailures } from "@/lib/photo-upload"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
@@ -69,6 +69,12 @@ function NewNoteContent() {
   const [userId, setUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  // 写真だけ失敗したときの警告。メモ本体は保存できているので画面にとどまって知らせる。
+  const [photoWarning, setPhotoWarning] = useState<string | null>(null)
+  // 保存できたあとに「保存」を押させないためのフラグ（同じメモが2件できるのを防ぐ）
+  const [saved, setSaved] = useState(false)
+  // プレビュー用に作った blob URL。差し替え時と後片付けで revoke する。
+  const previewUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -130,33 +136,51 @@ function NewNoteContent() {
     setShowPlantDropdown(false)
   }
 
+  function releasePreviewUrl() {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+  }
+
+  // プレビュー用に作った blob URL を、画面を離れるときに解放する
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    }
+  }, [])
+
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // アップロード時の圧縮は lib/photo-upload.ts が行うので、ここでは元ファイルを持つ。
+    // 以前はここで圧縮したものを保存していたため、共通化すると二重圧縮になっていた。
+    setPhotoFile(file)
+
+    // プレビューは軽い方がよいので、圧縮できたらそれを使う（失敗したら元ファイル）
+    let previewSource: File | Blob = file
     try {
-      const compressed = await imageCompression(file, {
+      previewSource = await imageCompression(file, {
         maxSizeMB: 1,
         maxWidthOrHeight: 1200,
         useWebWorker: true,
       })
-
-      setPhotoFile(compressed)
-      const reader = new FileReader()
-      reader.onload = (ev) => setPhotoPreview(ev.target?.result as string)
-      reader.readAsDataURL(compressed)
     } catch {
-      setPhotoFile(file)
-      const reader = new FileReader()
-      reader.onload = (ev) => setPhotoPreview(ev.target?.result as string)
-      reader.readAsDataURL(file)
+      previewSource = file
     }
+    releasePreviewUrl()
+    const url = URL.createObjectURL(previewSource)
+    previewUrlRef.current = url
+    setPhotoPreview(url)
   }
 
   function removePhoto() {
+    releasePreviewUrl()
     setPhotoFile(null)
     setPhotoPreview(null)
     setExistingPhotoPath(null)
+    setPhotoWarning(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -173,23 +197,25 @@ function NewNoteContent() {
     }
 
     setSaving(true)
+    setPhotoWarning(null)
     // session_id は互換のため引き続き保存する（絞り込みには user_id を使う）
     const sessionId = getSessionId()
 
     try {
       let photoPath: string | null = existingPhotoPath
+      let photoDetail = ""
 
       // Upload new photo（差し替え前の写真の削除はサーバー側で行う）
       if (photoFile) {
-        const ext = photoFile.name.split(".").pop() || "jpg"
-        const fileName = `${userId}/${Date.now()}.${ext}`
-
-        const { error: uploadError } = await supabase.storage
-          .from("visitor-notes")
-          .upload(fileName, photoFile)
-
-        if (!uploadError) {
-          photoPath = fileName
+        const { uploaded, failures } = await uploadPhotos([photoFile], {
+          bucket: "visitor-notes",
+          pathPrefix: `${userId}/`,
+        })
+        if (uploaded.length > 0) {
+          photoPath = uploaded[0].path
+        } else {
+          // 失敗したときは既存の写真のパスを消さない。差し替え前の写真をそのまま残す。
+          photoDetail = describeFailures(failures)
         }
       }
 
@@ -220,6 +246,16 @@ function NewNoteContent() {
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: null }))
         alert(`保存に失敗しました: ${error ?? "時間を置いてお試しください"}`)
+        setSaving(false)
+        return
+      }
+
+      if (photoDetail) {
+        // メモ本体は保存できている。遷移せずに警告を出すので、二重作成を防ぐため保存済みにする。
+        setSaved(true)
+        setPhotoWarning(
+          `メモは保存しましたが、写真は更新できませんでした：${photoDetail}`
+        )
         setSaving(false)
         return
       }
@@ -256,21 +292,42 @@ function NewNoteContent() {
         <h1 className="font-bold text-sm">
           {editId ? "ノートを編集" : "新しいノート"}
         </h1>
-        <button
-          onClick={handleSave}
-          disabled={saving || !noteText.trim()}
-          className="flex items-center gap-1 bg-herb-primary text-white rounded-lg px-3 h-8 text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-transform"
-        >
-          {saving ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Save size={14} />
-          )}
-          保存
-        </button>
+        {saved ? (
+          // 保存は済んでいる。もう一度押せると同じメモが2件できるので導線を差し替える。
+          <button
+            onClick={() => router.push("/my-notes")}
+            className="flex items-center gap-1 bg-herb-primary text-white rounded-lg px-3 h-8 text-sm font-semibold active:scale-[0.98] transition-transform"
+          >
+            メモ一覧へ
+          </button>
+        ) : (
+          <button
+            onClick={handleSave}
+            disabled={saving || !noteText.trim()}
+            className="flex items-center gap-1 bg-herb-primary text-white rounded-lg px-3 h-8 text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-transform"
+          >
+            {saving ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Save size={14} />
+            )}
+            保存
+          </button>
+        )}
       </div>
 
       <div className="px-4 py-4 space-y-5">
+        {photoWarning && (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+            {photoWarning}
+            <button
+              onClick={() => router.push("/my-notes")}
+              className="block mt-2 font-semibold underline"
+            >
+              メモ一覧へ
+            </button>
+          </div>
+        )}
         {/* Plant selector */}
         <div>
           <label className="text-sm font-semibold mb-2 block">
