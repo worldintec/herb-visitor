@@ -2,10 +2,19 @@ import { NextRequest, NextResponse } from "next/server"
 import { verifySessionToken } from "@/lib/auth"
 
 // 認証不要のパス（前方一致）
+//
+// これは「アクセスを許可するパス」の一覧。
+// hooks/useAutoLogout.ts にも同名のリストがあるが、あちらは
+// 「10分ごとのハートビートでログイン画面へ飛ばしてはいけないパス」の一覧で、
+// 目的が違う。片方だけ直すと片方が効かないので、両方を見ること。
 const PUBLIC_PATHS = [
   "/login",
   "/register",
   "/forgot-password",
+  // 植物の詳細ページだけはティザー公開する（未ログインには一部だけ見せて
+  // 会員登録に誘導する）。末尾のスラッシュは必須。"/plants" にすると
+  // 一覧ページ（会員限定）まで公開されてしまう。
+  "/plants/",
   "/api/auth/",
   "/api/bloom-photos",
   "/_next/",
@@ -28,6 +37,12 @@ const PUBLIC_PATHS = [
   "/api/plant-notes",
   // 植物マスタのAPIも同様（第11段階）。照合は前方一致だが、
   // "/api/plant-photos" や "/api/plant-notes" はこの文字列で始まらないため干渉しない。
+  //
+  // ティザー公開用の /api/plants/public も、この前方一致で通っている。
+  // あちらは意図的に getSession() を呼ばない唯一のデータAPIで、
+  // 公開してよい項目だけを組み立てて返す。
+  // 逆に、この行があるおかげで /api/plants 本体はリダイレクトされず 401 を返せる。
+  // 本体の getSession() が唯一の防御なので、絶対に外さないこと。
   "/api/plants",
   // マップ3テーブルのAPIも同様（第12-1段階）。各ハンドラ側で getSession() を検証し、
   // 未ログインには 401 を返す。"/api/plant-positions" は "/api/plants" で始まらない

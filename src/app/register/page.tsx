@@ -63,8 +63,9 @@ function RegisterPageInner() {
   return (
     <div className="min-h-dvh">
       <div className="hero-gradient px-5 pt-10 pb-6 rounded-b-3xl">
+        {/* 戻り先を落とさないよう、ここも redirect を引き継ぐ（下の「ログイン」リンクと同じ） */}
         <Link
-          href="/login"
+          href={`/login${redirect !== "/" ? `?redirect=${encodeURIComponent(redirect)}` : ""}`}
           className="inline-flex items-center gap-1 text-white/80 text-sm mb-3"
         >
           <ArrowLeft size={18} />

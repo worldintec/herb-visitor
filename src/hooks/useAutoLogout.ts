@@ -6,11 +6,32 @@ import { toLogin } from "@/lib/login-redirect"
 
 const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000     // ハートビート間隔: 10分
 
-// ログインなしでアクセスできる公開パス（プレフィックス一致）
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"]
+// 未ログインが正常な状態の画面（プレフィックス一致）。
+//
+// proxy.ts にも同名のリストがあるが、あちらは「アクセスを許可するパス」の一覧。
+// こちらは「未ログインでいるのが正常なので、ハートビートが 401 を受けても
+// ログイン画面へ飛ばしてはいけないパス」の一覧で、目的が違う。
+//
+// "/plants/" はティザー公開している植物の詳細ページ。これが無いと、
+// QRコードから来た未ログインの来園者が10分でログイン画面に飛ばされる。
+// 末尾のスラッシュは必須（"/plants" だと会員限定の一覧まで対象になる）。
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/plants/"]
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+}
 
 // 強制パスワード変更チェックをスキップするパス（未ログインで開ける画面、変更画面自身は対象外）
-const SKIP_PASSWORD_CHECK_PATHS = [...PUBLIC_PATHS, "/change-password"]
+//
+// 上の PUBLIC_PATHS を展開していたが、"/plants/" を足したときに
+// 「仮パスワードの会員が植物ページに留まれてしまう」挙動の変化が起きるため、
+// 展開をやめて明示的に並べている。ログイン済みの動きは従来のまま。
+const SKIP_PASSWORD_CHECK_PATHS = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/change-password",
+]
 
 // 職員用画面（別セッション・別認証）はビジター向けの機構の対象外
 const STAFF_PATH_PREFIX = "/staff"
@@ -38,7 +59,10 @@ export function useAutoLogout(enabled: boolean = true) {
   useEffect(() => {
     if (!enabled) return
     if (typeof window === "undefined") return
-    if (window.location.pathname.startsWith(STAFF_PATH_PREFIX)) return
+    if (pathname.startsWith(STAFF_PATH_PREFIX)) return
+    // 未ログインが正常な画面では監視しない。ここを見ていないと、
+    // ティザー公開した植物ページを開いたままの来園者が10分で追い出される。
+    if (isPublicPath(pathname)) return
 
     let expired = false
 
@@ -60,7 +84,10 @@ export function useAutoLogout(enabled: boolean = true) {
     return () => {
       clearInterval(heartbeat)
     }
-  }, [enabled])
+    // pathname を見るようになったので依存に入れる。
+    // 画面を移るとタイマーは作り直されるが、10分間同じページに留まった人を
+    // 追い出さないための仕組みなので、作り直しで困ることはない。
+  }, [enabled, pathname])
 
   // --- 強制パスワード変更誘導（ページ遷移のたびにチェック） ---
   useEffect(() => {
