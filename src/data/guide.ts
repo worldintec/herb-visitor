@@ -49,9 +49,9 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "検索画面（ハーブ一覧）のスクリーンショット。検索窓右のハートとカード右上のハートの位置に注釈つき",
     // 差し替え手順: public/images/guide/guide_search_screenshot.jpg を新しい画像で
     //   上書きし、imageWidth / imageHeight を新しい画像の実寸に合わせて更新する。
-    //   （現在の画像は登録数が「137種」表記のため、145種の画面に差し替えが必要）
     imageWidth: 739,
-    imageHeight: 1790,
+    imageHeight: 1600,
+    imageCaption: "検索画面（ハーブ一覧）",
     // TODO: 和名／学名の両対応や読み仮名検索など、検索仕様の拡張予定があれば
     //       ここに追記する（現状は名前・カテゴリ・香り・利用法のみが検索対象）。
   },
@@ -65,8 +65,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "指2本でピンチすると拡大・縮小、ダブルタップでも拡大できます。",
     ],
     tips: [
-      "配置図の小さな点は、各植物のおおよその位置を示す目安です。",
-      "点の色は植物の種類を表します。緑はハーブ、ピンクは花、青は樹木です。",
+      "配置マップのマーカーは、各植物のおおよその位置を示す目安です。マーカーの番号は、同じページの「ハーブ一覧」の番号と対応しています。",
+      "マップ画面の点の色は植物の種類を表します。緑はハーブ、ピンクは花、青は樹木です。エリア詳細の配置マップでは、すべて同じ色の番号付きマーカーになります。",
     ],
     links: [{ href: "/areas", label: "マップを開く" }],
     showImagePlaceholder: true,
@@ -75,8 +75,8 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     // 差し替え手順: public/images/guide/guide_map_screenshot.jpg を新しい画像で
     //   上書きし、imageWidth / imageHeight を新しい画像の実寸に合わせて更新する。
     imageWidth: 739,
-    imageHeight: 860,
-    imageCaption: "マップ画面（エリアマップ）のスクリーンショット",
+    imageHeight: 900,
+    imageCaption: "マップ画面（エリアマップ）",
     // TODO: 現在地表示機能は現時点で未実装。対応する場合はここに使い方を追記する。
   },
   {
@@ -122,31 +122,6 @@ export const GUIDE_SECTIONS: GuideSection[] = [
     links: [{ href: "/forgot-password", label: "パスワードの再発行についてはこちら" }],
   },
   {
-    id: "register",
-    title: "会員登録の方法",
-    lead:
-      "ノート機能や写真の投稿をご利用いただくには、会員登録が必要です。メールアドレスや電話番号は登録しません。",
-    body: [
-      "ログイン画面の下部にある「アカウントをお持ちでない方は 新規登録」から、登録画面に進みます。",
-      "IDとパスワードを決めて入力します。どちらも英数字8〜16文字です。",
-      "入力間違いを防ぐため、パスワードは確認用にもう一度入力します。",
-      "利用規約をお読みのうえ、「上記の利用規約を読み、内容に同意します。」にチェックを入れてください。",
-      "「登録する」をタップすると登録が完了し、そのままログインした状態になります。",
-    ],
-    tips: [
-      "メールアドレスや電話番号は登録しません。そのため、IDを忘れた場合はお調べすることができません。お手数ですが再度ご登録をお願いいたします。",
-      "パスワードを忘れた場合は、見沼氷川公園管理棟の窓口までお越しください。職員が本人確認のうえ、仮パスワードをお渡しします。",
-    ],
-    links: [{ href: "/register", label: "新規登録画面を開く" }],
-    showImagePlaceholder: true,
-    imageCaption: "新規登録画面のスクリーンショット（準備中）",
-    // TODO: スクリーンショットを public/images/guide/guide_register_screenshot.jpg に
-    //       配置し、下記3行のコメントを外して実寸を設定する。
-    // imageSrc: "/images/guide/guide_register_screenshot.jpg",
-    // imageWidth: 739,
-    // imageHeight: 1600,
-  },
-  {
     id: "notes",
     title: "マイノートの使い方",
     lead:
@@ -155,7 +130,9 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "画面下の「ノート」タブを開き、右上の「新規作成」から新しい記録を作ります。",
       "ハーブを選び、訪問日とメモを入力します。メモの入力は必須です。",
       "ハーブは、名前の一部を入力して候補から選びます（園内に植えられているハーブが対象です）。",
-      "写真も1枚まで添付できます。",
+      "写真は入力画面を下にスクロールした「写真を追加」から、その場で撮影するか、端末に保存されている写真を選びます。1件につき1枚です。",
+      "選んだ写真はプレビューが表示されます。やめるときは写真の右上の × を押します。別の写真に変えたいときも、いったん × で取り消してから選び直してください。",
+      "写真は自動で小さく圧縮されて保存されます。",
       "右上の「保存」をタップすると記録されます。",
       "ハーブの詳細ページの「ノートを書く」から進むと、そのハーブが選ばれた状態で開きます。",
       "「ノート」の一覧には、新しく作成したものから順に並びます。",
@@ -163,39 +140,17 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       "ゴミ箱アイコンをタップすると、確認のうえ削除できます。",
     ],
     tips: [
-      "記録はご自分のアカウントに紐づいて保存されます。他の方には見えません。",
+      "記録と写真はご自分のアカウントに紐づいて保存されます。他の方には見えません。園内での掲示や、他の方への公開も行いません。",
     ],
     links: [{ href: "/my-notes", label: "マイノートを開く" }],
     showImagePlaceholder: true,
-    imageCaption: "マイノート画面のスクリーンショット（準備中）",
-    // TODO: スクリーンショットを public/images/guide/guide_notes_screenshot.jpg に
-    //       配置し、下記3行のコメントを外して実寸を設定する。
-    // imageSrc: "/images/guide/guide_notes_screenshot.jpg",
-    // imageWidth: 739,
-    // imageHeight: 1600,
-  },
-  {
-    id: "photos",
-    title: "写真の投稿方法",
-    lead: "ノートには、ハーブの写真を1枚添付できます。",
-    body: [
-      "ノートの入力画面を下にスクロールし、「写真」の「写真を追加」をタップします。",
-      "その場で撮影するか、端末に保存された写真から選びます。",
-      "選んだ写真はその場でプレビューが表示されます。右上の×をタップすると取り消せます。",
-      "写真は自動で圧縮されてから送信されるため、通信量を気にせず投稿できます。",
-      "写真を差し替える場合は、いったん×で取り消してから選び直してください。",
-    ],
-    tips: [
-      "1件のノートに添付できる写真は1枚です。",
-      "投稿した写真はご自分のノートにのみ表示されます。園内での掲示や、他の方への公開は行いません。",
-    ],
-    links: [{ href: "/my-notes/new", label: "ノートを書いてみる" }],
-    showImagePlaceholder: true,
-    imageCaption: "写真を添付した画面のスクリーンショット（準備中）",
-    // TODO: スクリーンショットを public/images/guide/guide_photo_screenshot.jpg に
-    //       配置し、下記3行のコメントを外して実寸を設定する。
-    // imageSrc: "/images/guide/guide_photo_screenshot.jpg",
-    // imageWidth: 739,
-    // imageHeight: 1600,
+    imageSrc: "/images/guide/guide_notes_screenshot.jpg",
+    imageAlt:
+      "マイノートの入力画面。ハーブの選択、訪問日、メモの入力欄と、下に「写真を追加」のボタンが並んでいる",
+    // 差し替え手順: public/images/guide/guide_notes_screenshot.jpg を新しい画像で
+    //   上書きし、imageWidth / imageHeight を新しい画像の実寸に合わせて更新する。
+    imageWidth: 739,
+    imageHeight: 1268,
+    imageCaption: "ノートの入力画面（新しいノート）",
   },
 ]
