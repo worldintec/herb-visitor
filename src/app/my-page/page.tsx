@@ -99,6 +99,16 @@ export default function MyPage() {
             </div>
           )}
         </div>
+
+        {/* 退会はカードの外に置く。ログアウト（赤）より目立たせない。 */}
+        <div className="pt-2 text-center">
+          <Link
+            href="/my-page/withdraw"
+            className="text-xs text-herb-text-secondary underline"
+          >
+            退会する
+          </Link>
+        </div>
       </div>
     </div>
   )
