@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { User, KeyRound, Bell, LogOut, ChevronRight } from "lucide-react"
+import { User, KeyRound, Bell, FileText, LogOut, ChevronRight } from "lucide-react"
 import { toLogin } from "@/lib/login-redirect"
 
 export default function MyPage() {
@@ -63,6 +63,16 @@ export default function MyPage() {
           >
             <Bell size={22} className="text-herb-primary flex-shrink-0" />
             <span className="flex-1 text-base font-medium text-herb-text">通知設定</span>
+            <ChevronRight size={20} className="text-herb-text-secondary/50 flex-shrink-0" />
+          </Link>
+
+          {/* 登録のときに同意した規約を、あとからいつでも読み返せるようにする。 */}
+          <Link
+            href="/terms"
+            className="flex items-center gap-4 min-h-[64px] px-5 py-5 active:bg-herb-primary/5"
+          >
+            <FileText size={22} className="text-herb-primary flex-shrink-0" />
+            <span className="flex-1 text-base font-medium text-herb-text">利用規約</span>
             <ChevronRight size={20} className="text-herb-text-secondary/50 flex-shrink-0" />
           </Link>
 

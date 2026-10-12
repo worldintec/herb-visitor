@@ -7,7 +7,10 @@ import AddToHomeScreenModal from "@/components/add-to-home-screen-modal"
 
 // ログインなしでアクセスできる公開パス（プレフィックス一致）
 // useAutoLogout の PUBLIC_PATHS と同じ基準
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"]
+//
+// "/terms" は、規約を読んでいる最中にホーム画面追加のモーダルが
+// かぶらないようにするために入れている。
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/terms"]
 
 const STORAGE_KEY = "a2hsPromptDismissed"
 

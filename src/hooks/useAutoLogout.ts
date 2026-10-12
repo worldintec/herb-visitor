@@ -15,7 +15,10 @@ const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000     // ハートビート間隔: 10
 // "/plants/" はティザー公開している植物の詳細ページ。これが無いと、
 // QRコードから来た未ログインの来園者が10分でログイン画面に飛ばされる。
 // 末尾のスラッシュは必須（"/plants" だと会員限定の一覧まで対象になる）。
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/plants/"]
+//
+// "/terms" も同じ理由で必要。これが無いと、登録前の人が規約を読んでいる
+// 途中で10分経つとログイン画面に飛ばされる。
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/terms", "/plants/"]
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p))

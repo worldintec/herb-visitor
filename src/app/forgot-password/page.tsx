@@ -1,6 +1,12 @@
 import Link from "next/link"
-import { ArrowLeft, KeyRound, MapPin, Clock, ShieldCheck } from "lucide-react"
+import { ArrowLeft, KeyRound, UserPlus, AlertTriangle, FileText } from "lucide-react"
 
+// 文言は利用規約の第3条5項・6項と第8条4項に合わせている（src/lib/terms.ts）。
+// 規約を直したらこの画面と src/data/guide.ts の account 節も直すこと。
+//
+// 「管理棟の窓口で仮パスワードをお渡しします」とは書かない。
+// このアプリは氏名も連絡先も記録していないので、窓口に来た人が本当に
+// その会員かを確かめる手段が無い。できない確認を約束しないための判断。
 export default function ForgotPasswordPage() {
   return (
     <div className="min-h-dvh">
@@ -17,50 +23,51 @@ export default function ForgotPasswordPage() {
           <h1 className="text-xl font-bold text-white">IDまたはパスワードをお忘れの方</h1>
         </div>
         <p className="text-white/80 text-sm">
-          個人情報保護のため、オンラインでのパスワード再設定は行っておりません。
+          ご本人を確かめる手がかりをお預かりしていないため、お調べしてお伝えすることができません。
         </p>
       </div>
 
       <div className="px-4 py-6 space-y-4">
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
           <p className="text-sm text-herb-text leading-relaxed">
-            パスワードを忘れた場合は、<strong>見沼氷川公園管理棟</strong>に来所のうえ、職員にお申し出ください。職員が本人確認のうえ、その場で仮パスワードをお渡しします。
+            本アプリは、IDとパスワードのほかに、ご本人を確かめる手がかりを一切お預かりしていません。氏名・メールアドレス・電話番号のいずれも登録時にいただいていないため、<strong>IDやパスワードをお調べしてお伝えすることはできません</strong>。
           </p>
-          <p className="text-sm text-herb-text-secondary leading-relaxed">
-            受け取った仮パスワードでログイン後、必ず新しいパスワードへの変更をお願いします（変更が完了するまで他の画面はご利用いただけません）。
+          <p className="text-sm text-herb-text leading-relaxed">
+            お手数ですが、あらためて会員登録をしてください。IDは同じものを使い直すことも、新しく決めることもできます。
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-          <div className="flex items-start gap-2">
-            <MapPin size={18} className="text-herb-primary mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-herb-text-secondary">場所</p>
-              <p className="text-sm text-herb-text">見沼氷川公園 管理棟（受付窓口）</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <Clock size={18} className="text-herb-primary mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-medium text-herb-text-secondary">受付時間</p>
-              <p className="text-sm text-herb-text">9:00〜17:00（詳細は現地掲示をご確認ください）</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-herb-primary/5 rounded-2xl p-4 flex items-start gap-2">
-          <ShieldCheck size={18} className="text-herb-primary mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-herb-text-secondary leading-relaxed">
-            メールアドレスや電話番号による再設定、秘密の質問、会員証・QRコードによる再設定は行っておりません。必ず管理棟の窓口にお越しください。
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-2">
+          <AlertTriangle size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-herb-text leading-relaxed">
+            あらためて登録した場合、それまでに保存したマイノートの記録と写真は引き継がれません。新しいIDとパスワードは、登録のときに必ずお控えください。
           </p>
         </div>
 
         <Link
+          href="/register"
+          className="flex items-center justify-center gap-2 w-full h-11 rounded-full bg-herb-primary text-white font-semibold text-sm"
+        >
+          <UserPlus size={18} />
+          あらためて会員登録する
+        </Link>
+
+        <Link
           href="/login"
-          className="block w-full h-11 rounded-full bg-herb-primary text-white font-semibold text-sm text-center leading-[44px]"
+          className="block w-full h-11 rounded-full border border-herb-border text-herb-text-secondary font-medium text-sm text-center leading-[42px]"
         >
           ログイン画面に戻る
         </Link>
+
+        <p className="text-center">
+          <Link
+            href="/terms"
+            className="inline-flex items-center gap-1 text-xs text-herb-text-secondary underline underline-offset-2"
+          >
+            <FileText size={14} />
+            利用規約（第3条）を読む
+          </Link>
+        </p>
       </div>
     </div>
   )

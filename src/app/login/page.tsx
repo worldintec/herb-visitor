@@ -221,11 +221,13 @@ function LoginPageInner() {
                 href="/forgot-password"
                 className="text-herb-primary/80 hover:text-herb-primary underline underline-offset-2"
               >
-                パスワードを忘れた方はこちら
+                IDまたはパスワードを忘れた方
               </Link>
             </p>
+            {/* ID・パスワードのどちらを忘れた場合も答えは同じ（再登録）なので、
+                ID だけを別扱いにする案内は置かない。 */}
             <p>
-              IDを忘れた方は、お手数ですが再度新規登録をお願いいたします
+              どちらの場合も、お手数ですがあらためて会員登録をお願いしています
             </p>
           </div>
         </form>

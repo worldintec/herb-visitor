@@ -4,7 +4,7 @@ import { Suspense, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { UserPlus, ArrowLeft } from "lucide-react"
-import { TERMS_TEXT, TERMS_VERSION } from "@/lib/terms"
+import { TERMS_TEXT } from "@/lib/terms"
 import { safeRedirect } from "@/lib/safe-redirect"
 
 export default function RegisterPage() {
@@ -43,7 +43,9 @@ function RegisterPageInner() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, password, tosAgreed: true, tosVersion: TERMS_VERSION }),
+        // 同意した版は送らない。保存する版は api/auth/register が
+        // TERMS_VERSION から決める（クライアントの値は信用しない）。
+        body: JSON.stringify({ userId, password, tosAgreed: true }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -140,9 +142,20 @@ function RegisterPageInner() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               利用規約
             </label>
-            <div className="max-h-48 overflow-y-auto border border-herb-border rounded-lg p-3 text-xs text-herb-text leading-relaxed whitespace-pre-wrap bg-green-50/30">
+            <div className="max-h-64 overflow-y-auto border border-herb-border rounded-lg p-3 text-xs text-herb-text leading-relaxed whitespace-pre-wrap bg-green-50/30">
               {TERMS_TEXT}
             </div>
+            {/* 必ず別タブで開く。同じタブで遷移すると入力中のIDとパスワードが消える。 */}
+            <p className="mt-2 text-right">
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-herb-primary underline underline-offset-2"
+              >
+                利用規約を全文表示
+              </Link>
+            </p>
             <label className="flex items-start gap-2 mt-3 cursor-pointer">
               <input
                 type="checkbox"
