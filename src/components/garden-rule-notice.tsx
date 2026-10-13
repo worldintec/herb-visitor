@@ -12,7 +12,7 @@ import { Leaf } from "lucide-react"
 // 閉じるボタンは付けない。常に出しておくもの。
 
 const LINE_1 = "園内の草木はさいたま市の所有物です。"
-const LINE_2 = "摘み取り・持ち帰り・傷つける行為はしないでください。"
+const LINE_2 = "摘み取り・持ち帰り・損傷はしないでください。"
 
 export default function GardenRuleNotice({
   className = "",

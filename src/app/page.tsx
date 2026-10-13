@@ -9,6 +9,7 @@ import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
 import PushSubscribeButton from "@/components/push-subscribe-button"
+import GardenRuleNotice from "@/components/garden-rule-notice"
 
 const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
 
@@ -190,6 +191,12 @@ export default function HomePage() {
       {/* Push Notification Opt-in */}
       <section className="px-4 mt-4 flex justify-center">
         <PushSubscribeButton />
+      </section>
+
+      {/* 園内のお願い。検索結果より上に置く。下に置くと検索中に結果リストの
+          下へ回ってしまい、スクロールしないと目に入らなくなる。 */}
+      <section className="px-4 mt-4">
+        <GardenRuleNotice />
       </section>
 
       {/* Search Results */}
