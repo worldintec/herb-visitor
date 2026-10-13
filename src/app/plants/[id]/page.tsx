@@ -24,6 +24,7 @@ import { fetchPlant, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { sortPhotosByPriority } from "@/lib/photo-utils"
 import FavoriteButton from "@/components/favorite-button"
+import GardenRuleNotice from "@/components/garden-rule-notice"
 
 interface PlantNote {
   id: string
@@ -172,6 +173,8 @@ export default function PlantDetailPage({
               {teaser.category}
             </span>
           )}
+
+          <GardenRuleNotice className="mt-3" />
 
           {teaser.teaser && (
             <div className="mt-5 bg-white rounded-2xl p-4 shadow-sm">
@@ -438,6 +441,8 @@ export default function PlantDetailPage({
             </div>
           </div>
         </div>
+
+        <GardenRuleNotice className="mt-3" />
 
         {/* Info cards */}
         <div className="mt-5 space-y-3">

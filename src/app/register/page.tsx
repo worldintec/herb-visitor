@@ -167,6 +167,11 @@ function RegisterPageInner() {
                 上記の利用規約を読み、内容に同意します。
               </span>
             </label>
+            {/* 規約のスクロール枠は読まれない。同意する直前にもう一度目に入れる。
+                文面が植物ページ・ログイン画面とは違うので共通部品は使わない。 */}
+            <p className="mt-2 text-xs text-green-800 leading-relaxed">
+              ※園内の草木の摘み取り・持ち帰り・損傷は禁止です。詳しくは上記の利用規約をご覧ください。
+            </p>
           </div>
 
           {error && (

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { LogIn } from "lucide-react"
 import { safeRedirect } from "@/lib/safe-redirect"
+import GardenRuleNotice from "@/components/garden-rule-notice"
 
 // ========== 背景スライドショー ==========
 
@@ -233,6 +234,9 @@ function LoginPageInner() {
             </p>
           </div>
         </form>
+
+        {/* フォームカードの外に置く。中に足すと窓口の案内と1つの塊に見えてしまう。 */}
+        <GardenRuleNotice className="mt-4" />
       </div>
     </div>
   )
