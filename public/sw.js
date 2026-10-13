@@ -1,3 +1,11 @@
+// この Service Worker が扱うのは通知だけ。fetch ハンドラは置いていないので、
+// 応答は何もキャッシュしていない。
+//
+// 将来 fetch ハンドラを足して応答をキャッシュするなら、
+// /api/visitor-notes/*/photo は必ず除外すること。
+// マイノートの写真は非公開で、キャッシュに入ると端末に残り、
+// ログアウトしたあとでも取り出せてしまう。
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 

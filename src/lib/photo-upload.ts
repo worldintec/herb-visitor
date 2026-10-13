@@ -1,7 +1,8 @@
 // 写真アップロードの共通処理。
 //
-// もう一方のリポジトリ（herb-garden）にも同じファイルがある。違うのは圧縮の既定値だけ。
-// 共有パッケージは作らない方針なので、片方を直したらもう片方も直すこと。
+// もう一方のリポジトリ（herb-garden）にも同じ名前のファイルがあるが、2026-10-13 以降は
+// 同じ内容ではない。マイノートの写真を非公開にしたため、こちらは送信だけを
+// 署名付きURL経由（サーバーがパスを決める）に差し替えてある。向こうは変更していない。
 //
 // この関数は例外を投げない。どんな場合も { uploaded, failures } を返すので、
 // 呼び出し側は try/catch ではなく failures.length を見る。
@@ -21,8 +22,7 @@ export type PhotoUploadFailure = {
 export type UploadedPhoto = {
   index: number // 引数 files の添字。キャプションとの対応付けに使う
   fileName: string // 元のファイル名
-  path: string // Storage のオブジェクトパス。DB の storage_path に入れる
-  url: string // 公開URL
+  path: string // Storage のオブジェクトパス。DB の photo_path に入れる
 }
 
 export type PhotoUploadResult = {
@@ -34,6 +34,10 @@ export type PhotoMessageTone = "success" | "warning" | "error"
 
 // Supabase プロジェクト既定の 50MB。バケット側の File size limit は Unset。
 export const MAX_FILE_BYTES = 50 * 1024 * 1024
+
+// 送信先はマイノートのバケットだけ。発行APIがこのバケットに固定なので引数では受けない。
+const BUCKET = "visitor-notes"
+const UPLOAD_URL_ENDPOINT = "/api/visitor-notes/upload-url"
 
 // 圧縮の既定値。herb-garden 版はここだけ { maxSizeMB: 2, maxWidthOrHeight: 1920 } になっている。
 const COMPRESSION_OPTIONS = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true }
@@ -148,13 +152,13 @@ export function buildPhotoOnlyMessage(
 }
 
 /**
- * 1ファイルずつ 圧縮 → サイズ確認 → upload → 公開URL取得 の順に処理する。
+ * 1ファイルずつ 圧縮 → サイズ確認 → アップロード先の発行 → 送信 の順に処理する。
  * 1枚失敗しても残りは続ける。例外は投げない。
+ *
+ * 公開URLは返さない。写真は /api/visitor-notes/[id]/photo 経由で読むので、
+ * 画面が必要とするのは DB に入れる path だけ。
  */
-export async function uploadPhotos(
-  files: File[],
-  opts: { bucket: string; pathPrefix: string }
-): Promise<PhotoUploadResult> {
+export async function uploadPhotos(files: File[]): Promise<PhotoUploadResult> {
   const uploaded: UploadedPhoto[] = []
   const failures: PhotoUploadFailure[] = []
 
@@ -168,7 +172,7 @@ export async function uploadPhotos(
           body = await imageCompression(file, COMPRESSION_OPTIONS)
         } catch (err) {
           console.warn(
-            `[photo-upload] compress skipped bucket=${opts.bucket} file=${file.name}` +
+            `[photo-upload] compress skipped bucket=${BUCKET} file=${file.name}` +
               ` type=${file.type || "(empty)"} size=${file.size} message=${messageOf(err)}`
           )
         }
@@ -176,7 +180,7 @@ export async function uploadPhotos(
         if (body.size > MAX_FILE_BYTES) {
           logFailure(
             "too large",
-            opts.bucket,
+            BUCKET,
             file,
             body.size,
             `compressed size ${body.size} exceeds MAX_FILE_BYTES ${MAX_FILE_BYTES}`
@@ -186,44 +190,73 @@ export async function uploadPhotos(
         }
 
         const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
-        const path = `${opts.pathPrefix}${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
         const contentType = file.type || EXT_CONTENT_TYPE[ext] || "image/jpeg"
 
+        // パスはサーバーが決める。クライアントが渡すのは拡張子だけ。
+        const target = await requestUploadTarget(ext, file, body.size, failures)
+        if (!target) continue
+
+        // バケットが非公開でも、token で認証されるので anon クライアントで送れる
         const { error } = await supabase.storage
-          .from(opts.bucket)
-          .upload(path, body, { contentType, upsert: false })
+          .from(BUCKET)
+          .uploadToSignedUrl(target.path, target.token, body, { contentType })
 
         if (error) {
           const { reason, raw } = classify(error)
-          logFailure("upload failed", opts.bucket, file, body.size, raw)
+          logFailure("upload failed", BUCKET, file, body.size, raw)
           failures.push({ fileName: file.name, reason, raw })
           continue
         }
 
-        const url = supabase.storage.from(opts.bucket).getPublicUrl(path).data.publicUrl
-        if (!url) {
-          logFailure("public url failed", opts.bucket, file, body.size, `path=${path}`)
-          failures.push({
-            fileName: file.name,
-            reason: "保存できませんでした（公開URLを取得できませんでした）",
-          })
-          continue
-        }
-
-        uploaded.push({ index, fileName: file.name, path, url })
+        uploaded.push({ index, fileName: file.name, path: target.path })
       } catch (err) {
         const { reason, raw } = classify(err)
-        logFailure("unexpected error", opts.bucket, file, file.size, raw)
+        logFailure("unexpected error", BUCKET, file, file.size, raw)
         failures.push({ fileName: file.name, reason, raw })
       }
     }
   } catch (err) {
     // ここに来る経路は想定していないが、例外を投げないという約束を守るために受ける
-    console.error(`[photo-upload] aborted bucket=${opts.bucket} message=${messageOf(err)}`)
+    console.error(`[photo-upload] aborted bucket=${BUCKET} message=${messageOf(err)}`)
     failures.push({ fileName: "(不明)", reason: `保存できませんでした（${messageOf(err)}）` })
   }
 
   return { uploaded, failures }
+}
+
+/**
+ * アップロード先（パスと1回限りの token）をサーバーに発行させる。
+ * 失敗したときは failures に積んで null を返す（通信そのものの失敗は呼び出し側が受ける）。
+ */
+async function requestUploadTarget(
+  ext: string,
+  file: File,
+  compressedSize: number,
+  failures: PhotoUploadFailure[]
+): Promise<{ path: string; token: string } | null> {
+  const res = await fetch(UPLOAD_URL_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ext }),
+  })
+  const json = (await res.json().catch(() => null)) as
+    | { path?: string; token?: string; error?: string }
+    | null
+
+  const fail = (message: string) => {
+    logFailure("upload url failed", BUCKET, file, compressedSize, message)
+    failures.push({
+      fileName: file.name,
+      reason: `保存できませんでした（${message}）`,
+      raw: message,
+    })
+    return null
+  }
+
+  if (!res.ok) return fail(json?.error ?? `status=${res.status}`)
+  if (!json?.path || !json?.token) return fail("response has no path or token")
+
+  return { path: json.path, token: json.token }
 }
 
 /**

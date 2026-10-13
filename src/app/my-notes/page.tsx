@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { toLogin } from "@/lib/login-redirect"
+import { getNotePhotoUrl } from "@/lib/note-photo"
 import {
   BookOpen,
   Plus,
@@ -15,12 +16,6 @@ import {
   LogOut,
 } from "lucide-react"
 import type { VisitorNote } from "@/types/database"
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-
-function getNotePhotoUrl(path: string) {
-  return `${SUPABASE_URL}/storage/v1/object/public/visitor-notes/${path}`
-}
 
 export default function MyNotesPage() {
   const router = useRouter()
@@ -168,11 +163,16 @@ export default function MyNotesPage() {
                 {note.photo_path && (
                   <div className="aspect-[16/9] relative">
                     <Image
-                      src={getNotePhotoUrl(note.photo_path)}
+                      src={getNotePhotoUrl(note.id)}
                       alt="ノートの写真"
                       fill
                       className="object-cover"
                       sizes="(max-width: 512px) 100vw, 480px"
+                      // 画像最適化を通さない。最適化はサーバー側がこのURLを
+                      // 取りに行く仕組みで、そのときクッキーが送られないため
+                      // 401 になる。加えて、最適化後の画像が /_next/image に
+                      // 公開でキャッシュされてしまう。
+                      unoptimized
                     />
                   </div>
                 )}

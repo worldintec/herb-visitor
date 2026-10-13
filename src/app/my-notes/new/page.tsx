@@ -19,12 +19,7 @@ import { fetchCurrentUser } from "@/lib/current-user"
 import type { Plant, VisitorNote } from "@/types/database"
 import imageCompression from "browser-image-compression"
 import { uploadPhotos, describeFailures } from "@/lib/photo-upload"
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-
-function getNotePhotoUrl(path: string) {
-  return `${SUPABASE_URL}/storage/v1/object/public/visitor-notes/${path}`
-}
+import { getNotePhotoUrl } from "@/lib/note-photo"
 
 export default function NewNotePage() {
   return (
@@ -113,7 +108,8 @@ function NewNoteContent() {
           setVisitDate(note.visit_date)
           if (note.photo_path) {
             setExistingPhotoPath(note.photo_path)
-            setPhotoPreview(getNotePhotoUrl(note.photo_path))
+            // 既存の写真はノートのIDで引く（パスからURLは組み立てられない）
+            setPhotoPreview(getNotePhotoUrl(editId))
           }
         }
       }
@@ -207,10 +203,8 @@ function NewNoteContent() {
 
       // Upload new photo（差し替え前の写真の削除はサーバー側で行う）
       if (photoFile) {
-        const { uploaded, failures } = await uploadPhotos([photoFile], {
-          bucket: "visitor-notes",
-          pathPrefix: `${userId}/`,
-        })
+        // 保存先のパスはサーバーが決める（バケットも送信側が固定で持つ）
+        const { uploaded, failures } = await uploadPhotos([photoFile])
         if (uploaded.length > 0) {
           photoPath = uploaded[0].path
         } else {
@@ -435,6 +429,11 @@ function NewNoteContent() {
                 width={400}
                 height={300}
                 className="w-full h-48 object-cover"
+                // 既存の写真を出すときは /api/visitor-notes/[id]/photo になる。
+                // 画像最適化を通すとクッキーが送られず 401 になり、さらに
+                // /_next/image に公開でキャッシュされてしまう。
+                // 撮りたての写真は blob URL で、こちらは元から最適化されない。
+                unoptimized
               />
               <button
                 onClick={removePhoto}
