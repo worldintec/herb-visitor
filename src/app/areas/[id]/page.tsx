@@ -12,6 +12,33 @@ import PlantImage from "@/components/plant-image"
 
 type PlantPos = { name: string; x: number; y: number }
 
+// ─── 配置マップの描画設定 ───────────────────────────────────────────────────────
+
+// 描画領域（viewBox）の大きさ
+const MAP_W = 320
+const MAP_H = 200
+
+// Excel座標は、全体マップのSVG座標に比べて縦が約1.6倍の単位系になっている。
+// 2026年10月14日に実データで検算した結果、エリアAで0.642、エリアBで0.598。
+// 厳密な座標変換ではなく、見た目の縦横比をそろえるための補正。
+// plant_positions の値は変えず、表示のときだけ掛ける。
+const Y_SCALE = 0.6
+
+// 倍率の上限。2026年10月14日の実データで、植物の多いエリア（T・B・W・A・K）の
+// 倍率が1.1〜2.0だったため、その2倍を上限とした。
+// 株数の少ない小さなエリアで、近くの株が描画領域いっぱいに離れて描かれるのを防ぐ。
+const MAX_SCALE = 4
+
+// マーカーの範囲の最小サイズ（描画領域内の値）。1件だけ・一直線に並ぶエリアで
+// 枠が点や細い棒にならないよう、中心を保ったままこの大きさまで広げる。
+const MIN_EXTENT_W = 60
+const MIN_EXTENT_H = 40
+
+// マーカーの範囲から枠までの余白（マーカー半径8＋余白10）
+const FRAME_PAD = 18
+// 枠の線が描画領域の端で切れないための余白
+const EDGE_PAD = 4
+
 export default function AreaDetailPage({
   params,
 }: {
@@ -186,23 +213,31 @@ export default function AreaDetailPage({
 
           {/* SVG配置マップ（plant_positionsテーブルから取得・自動スケーリング） */}
           {!positionsError && positions.length > 0 && (() => {
-            const PAD = 16
-            const W = 320
-            const H = 200
             const xs = positions.map((p) => p.x)
-            const ys = positions.map((p) => p.y)
+            const ys = positions.map((p) => p.y * Y_SCALE)
             const minX = Math.min(...xs)
             const maxX = Math.max(...xs)
             const minY = Math.min(...ys)
             const maxY = Math.max(...ys)
-            const rangeX = maxX - minX || 40
-            const rangeY = maxY - minY || 40
-            const scaleX = (W - PAD * 2) / rangeX
-            const scaleY = (H - PAD * 2) / rangeY
-            const scale = Math.min(scaleX, scaleY)
+            const rangeX = maxX - minX
+            const rangeY = maxY - minY
+            // 枠と余白を除いた、マーカーを置ける大きさ
+            const availW = MAP_W - (EDGE_PAD + FRAME_PAD) * 2
+            const availH = MAP_H - (EDGE_PAD + FRAME_PAD) * 2
+            // 範囲が0の向き（1件だけ・一直線）は倍率の計算に使わない
+            const scale = Math.min(
+              rangeX > 0 ? availW / rangeX : Infinity,
+              rangeY > 0 ? availH / rangeY : Infinity,
+              MAX_SCALE,
+            )
+            // マーカーの範囲を最小サイズまで広げ、余白を足して枠にする（中央に置く）
+            const frameW = Math.max(rangeX * scale, MIN_EXTENT_W) + FRAME_PAD * 2
+            const frameH = Math.max(rangeY * scale, MIN_EXTENT_H) + FRAME_PAD * 2
+            const centerX = (minX + maxX) / 2
+            const centerY = (minY + maxY) / 2
             const toSvg = (ex: number, ey: number) => ({
-              x: PAD + (ex - minX) * scale,
-              y: PAD + (ey - minY) * scale,
+              x: MAP_W / 2 + (ex - centerX) * scale,
+              y: MAP_H / 2 + (ey * Y_SCALE - centerY) * scale,
             })
             return (
               <div className="px-4 pt-4">
@@ -212,12 +247,24 @@ export default function AreaDetailPage({
                 </h2>
                 <div className="bg-white rounded-2xl p-3 shadow-sm overflow-hidden">
                   <svg
-                    viewBox={`0 0 ${W} ${H}`}
+                    viewBox={`0 0 ${MAP_W} ${MAP_H}`}
                     className="w-full"
                     style={{ maxHeight: "260px" }}
                     aria-label={`エリア${areaId} 植物配置図`}
                   >
-                    <rect width={W} height={H} fill="rgba(29,158,117,0.05)" rx="6" />
+                    {/* 植物のある範囲の枠。花壇の実際の形ではない */}
+                    <rect
+                      x={(MAP_W - frameW) / 2}
+                      y={(MAP_H - frameH) / 2}
+                      width={frameW}
+                      height={frameH}
+                      rx={6}
+                      fill="rgba(29,158,117,0.05)"
+                      stroke="#1D9E75"
+                      strokeWidth={1.2}
+                      strokeDasharray="4,3"
+                      strokeOpacity={0.6}
+                    />
                     {positions.map((pos, idx) => {
                       const { x, y } = toSvg(pos.x, pos.y)
                       const isSelected = selectedPlant === pos.name
@@ -278,6 +325,9 @@ export default function AreaDetailPage({
                       )
                     })}
                   </svg>
+                  <p className="text-center text-xs text-herb-text-secondary mt-1">
+                    枠は、植物のある範囲のおおよそを示しています。
+                  </p>
                   {selectedPlant && (
                     <div className="mt-2 pt-2 border-t border-herb-border">
                       <Link
