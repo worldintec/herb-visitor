@@ -39,6 +39,17 @@ const ZONES_BY_SIZE = [...ZONES].sort(
     ZONE_AREAS[b].w * ZONE_AREAS[b].h - ZONE_AREAS[a].w * ZONE_AREAS[a].h
 )
 
+// ─── エリア名ラベル ─────────────────────────────────────────────────────────────
+// スマホ幅（表示幅約302px）で約8.5px。太字・濃い色・白フチで背景の図面の上でも読めるようにする。
+const LABEL_FONT_SIZE = 28
+// 枠の端からの余白と、左上に置くときの枠の上端からベースラインまで（余白＋大文字の高さ約20）
+const LABEL_INSET = 4
+const LABEL_TOP_BASELINE = LABEL_INSET + 20
+
+// 枠の左下に置くエリア（ほかは左上）。2026年10月の実データの枠で計算すると、
+// 左上のままでは Q が R と、G が H とラベルが重なったため。
+const LABEL_AT_BOTTOM: ReadonlySet<Zone> = new Set<Zone>(["G", "Q"])
+
 // ─── 種別カラー ─────────────────────────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, string> = {
@@ -173,6 +184,18 @@ export default function HerbGardenFloorMap() {
 
     return bounds
   }, [plots])
+
+  // ゾーン枠の位置。プロットが存在する場合はその上下左右範囲に枠を合わせる
+  function zoneFrame(zone: Zone): { x: number; y: number; w: number; h: number } {
+    const a = ZONE_AREAS[zone]
+    const off = zoneOffsets[zone]
+    const pb = zonePlotBounds[zone]
+    const x = pb ? pb.minX - PLOT_RADIUS - PLOT_PADDING : a.x + off.dx
+    const w = pb ? (pb.maxX + PLOT_RADIUS + PLOT_PADDING) - x : a.w
+    const y = pb ? pb.minY - PLOT_RADIUS - PLOT_PADDING : a.y + off.dy
+    const h = pb ? (pb.maxY + PLOT_RADIUS + PLOT_PADDING) - y : a.h
+    return { x, y, w, h }
+  }
 
   // ── ズーム・パンのジェスチャー処理 ──────────────────────────────────────────
   function localPoint(e: { clientX: number; clientY: number }): { x: number; y: number } {
@@ -409,14 +432,7 @@ export default function HerbGardenFloorMap() {
 
           {/* ゾーン（面積降順で描画） */}
           {ZONES_BY_SIZE.map((zone) => {
-            const a = ZONE_AREAS[zone]
-            const off = zoneOffsets[zone]
-            // プロットが存在する場合はその上下左右範囲に枠を合わせる
-            const pb = zonePlotBounds[zone]
-            const ax = pb ? pb.minX - PLOT_RADIUS - PLOT_PADDING : a.x + off.dx
-            const aw = pb ? (pb.maxX + PLOT_RADIUS + PLOT_PADDING) - ax : a.w
-            const ay = pb ? pb.minY - PLOT_RADIUS - PLOT_PADDING : a.y + off.dy
-            const ah = pb ? (pb.maxY + PLOT_RADIUS + PLOT_PADDING) - ay : a.h
+            const { x: ax, y: ay, w: aw, h: ah } = zoneFrame(zone)
             const isHovered = hoveredZone === zone
             return (
               <g key={zone}>
@@ -448,19 +464,6 @@ export default function HerbGardenFloorMap() {
                     router.push(`/areas/${zone}`)
                   }}
                 />
-                {/* ゾーンラベル（左上固定・見切れ防止） */}
-                <text
-                  x={ax + 4}
-                  y={ay + 11}
-                  textAnchor="start"
-                  fontSize={11}
-                  fontWeight={500}
-                  fill={isHovered ? "#0F6E56" : "#5f5e5a"}
-                  fillOpacity={isHovered ? 1 : 0.65}
-                  className="pointer-events-none select-none"
-                >
-                  {zone}
-                </text>
               </g>
             )
           })}
@@ -501,6 +504,32 @@ export default function HerbGardenFloorMap() {
                   style={{ transition: "r 0.1s" }}
                 />
               </g>
+            )
+          })}
+
+          {/* ゾーンラベル（マーカーに隠れないよう最後に描く） */}
+          {ZONES.map((zone) => {
+            const f = zoneFrame(zone)
+            const y = LABEL_AT_BOTTOM.has(zone)
+              ? f.y + f.h - LABEL_INSET
+              : f.y + LABEL_TOP_BASELINE
+            return (
+              <text
+                key={zone}
+                x={f.x + LABEL_INSET}
+                y={y}
+                textAnchor="start"
+                fontSize={LABEL_FONT_SIZE}
+                fontWeight={700}
+                fill="#0F6E56"
+                fillOpacity={1}
+                stroke="#ffffff"
+                strokeWidth={3}
+                paintOrder="stroke"
+                className="pointer-events-none select-none"
+              >
+                {zone}
+              </text>
             )
           })}
         </svg>
