@@ -476,7 +476,7 @@ export default function PlantDetailPage({
               <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                 <MessageCircle size={16} className="text-emerald-500" />
               </div>
-              <h3 className="font-semibold text-sm">観察ノート</h3>
+              <h3 className="font-semibold text-sm">園からのメモ</h3>
               <span className="text-xs text-herb-text-secondary">（{notes.length}件）</span>
             </div>
             <div className="space-y-2">
@@ -508,7 +508,7 @@ export default function PlantDetailPage({
             className="flex items-center justify-center gap-2 w-full h-12 bg-herb-primary text-white rounded-2xl font-semibold text-sm shadow-md active:scale-[0.98] transition-transform"
           >
             <PenLine size={18} />
-            ノートを書く
+            マイノートに書く
           </Link>
         </div>
       </div>
