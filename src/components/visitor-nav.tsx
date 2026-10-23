@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
 import { Home, Leaf, Map, BookOpen, Bell, HelpCircle, User } from "lucide-react"
 
 const navItems = [
@@ -15,42 +14,10 @@ const navItems = [
   { href: "/my-page", label: "マイページ", icon: User },
 ]
 
-// 未ログインでも開けるページ。ティザー公開している植物の詳細ページと、
-// 登録前の人が読む利用規約。
-const PUBLIC_PATH_PREFIXES = ["/plants/", "/terms"]
-
+// 出すかどうか（ログイン状態・職員画面）は app-shell.tsx が決める。
+// ここは描画だけを受け持つ。
 export default function VisitorNav() {
   const pathname = usePathname()
-
-  // 下部タブは7個すべてログインが必要なので、未ログインのときは出さない
-  // （押しても全部ログイン画面に飛ぶため、導線を会員登録の1本に絞る）。
-  //
-  // 会員が使う画面にリクエストを増やしたくないので、確認は上の公開パスだけで行う。
-  // それ以外のパスでは従来どおり、何も確認せずに描画する。
-  const isPublicPath = PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p))
-
-  // null は未確認。公開パスでは判定が付くまで描画しない
-  // （先に出してから消すと、タブがちらついて見える）。
-  const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    if (!isPublicPath) return
-    let cancelled = false
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : { user: null }))
-      .then(({ user }) => {
-        if (!cancelled) setLoggedIn(!!user)
-      })
-      .catch(() => {
-        // 判定できないときは従来どおり出す（会員からタブを奪わない方を選ぶ）
-        if (!cancelled) setLoggedIn(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isPublicPath, pathname])
-
-  if (isPublicPath && loggedIn !== true) return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-herb-border pb-safe">
