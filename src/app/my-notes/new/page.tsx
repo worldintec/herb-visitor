@@ -22,6 +22,12 @@ import { uploadPhotos, describeFailures } from "@/lib/photo-upload"
 import { getNotePhotoUrl } from "@/lib/note-photo"
 import MessageBanner, { BANNER_POSITION, type BannerMessage } from "@/components/message-banner"
 
+// 保存に失敗したときに画面に出す文言。詳細（サーバーの返したエラーや例外）は console.error にだけ出す。
+// 通信の失敗は園内で電波が弱いときに多いので、電波の確認を促す。
+const SAVE_NETWORK_ERROR = "保存に失敗しました。電波の状態をご確認のうえ、もう一度お試しください。"
+// サーバーがエラーを返したときは電波の問題ではないので、案内を分ける。
+const SAVE_SERVER_ERROR = "保存に失敗しました。時間を置いて、もう一度お試しください。"
+
 export default function NewNotePage() {
   return (
     <Suspense
@@ -243,10 +249,8 @@ function NewNoteContent() {
       }
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: null }))
-        setMessage({
-          type: "error",
-          text: `保存に失敗しました: ${error ?? "時間を置いてお試しください"}`,
-        })
+        console.error(`Save error: status=${res.status}`, error)
+        setMessage({ type: "error", text: SAVE_SERVER_ERROR })
         setSaving(false)
         return
       }
@@ -265,10 +269,7 @@ function NewNoteContent() {
       router.push(`/my-notes?saved=${editId ? "updated" : "created"}`)
     } catch (err) {
       console.error("Save error:", err)
-      setMessage({
-        type: "error",
-        text: `保存に失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}`,
-      })
+      setMessage({ type: "error", text: SAVE_NETWORK_ERROR })
     } finally {
       setSaving(false)
     }
@@ -307,7 +308,8 @@ function NewNoteContent() {
         ) : (
           <button
             onClick={handleSave}
-            disabled={saving || !noteText.trim()}
+            // 訪問日が空だとサーバーが受け付けない（何度試しても通らない）ので、メモと同じく押せなくする
+            disabled={saving || !noteText.trim() || !visitDate}
             className="flex items-center gap-1 bg-herb-primary text-white rounded-lg px-3 h-8 text-sm font-semibold disabled:opacity-50 active:scale-[0.98] transition-transform"
           >
             {saving ? (
