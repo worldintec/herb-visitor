@@ -16,6 +16,16 @@ import {
   LogOut,
 } from "lucide-react"
 import type { VisitorNote } from "@/types/database"
+import MessageBanner, { type BannerMessage } from "@/components/message-banner"
+
+// 保存画面から ?saved= で渡される印と、そのときに出す文言
+const SAVED_MESSAGES: Record<string, string> = {
+  created: "ノートを保存しました",
+  updated: "ノートを更新しました",
+}
+
+// 成功の帯を自動で消すまでの時間。一覧は居続ける画面なので残さない。
+const SUCCESS_BANNER_MS = 4000
 
 export default function MyNotesPage() {
   const router = useRouter()
@@ -23,6 +33,25 @@ export default function MyNotesPage() {
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [message, setMessage] = useState<BannerMessage | null>(null)
+
+  // 保存画面から戻ってきたときの「保存しました」。
+  // 出したら印を URL から消す（replaceState なので履歴にも残らない）。
+  // 消さないと、一覧を再読み込みしたときにまた出てしまう。
+  useEffect(() => {
+    const saved = new URLSearchParams(window.location.search).get("saved")
+    if (!saved) return
+    window.history.replaceState(null, "", window.location.pathname)
+    const text = SAVED_MESSAGES[saved]
+    if (text) setMessage({ type: "success", text })
+  }, [])
+
+  // 成功の帯だけ数秒で消す。失敗の帯は × を押すまで残す。
+  useEffect(() => {
+    if (message?.type !== "success") return
+    const timer = setTimeout(() => setMessage(null), SUCCESS_BANNER_MS)
+    return () => clearTimeout(timer)
+  }, [message])
 
   async function handleLogout() {
     if (!confirm("ログアウトしますか？")) return
@@ -87,6 +116,9 @@ export default function MyNotesPage() {
 
   return (
     <div className="min-h-dvh">
+      {message && (
+        <MessageBanner message={message} onClose={() => setMessage(null)} />
+      )}
       {/* Header */}
       <div className="px-4 pt-8 pb-4">
         <div className="flex items-center justify-between gap-2">

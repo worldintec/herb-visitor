@@ -20,6 +20,7 @@ import type { Plant, VisitorNote } from "@/types/database"
 import imageCompression from "browser-image-compression"
 import { uploadPhotos, describeFailures } from "@/lib/photo-upload"
 import { getNotePhotoUrl } from "@/lib/note-photo"
+import MessageBanner, { BANNER_POSITION, type BannerMessage } from "@/components/message-banner"
 
 export default function NewNotePage() {
   return (
@@ -66,6 +67,8 @@ function NewNoteContent() {
   const [loading, setLoading] = useState(true)
   // 写真だけ失敗したときの警告。メモ本体は保存できているので画面にとどまって知らせる。
   const [photoWarning, setPhotoWarning] = useState<string | null>(null)
+  // 保存に失敗したときの知らせ。成功の知らせは一覧（/my-notes）側で出す。
+  const [message, setMessage] = useState<BannerMessage | null>(null)
   // 保存できたあとに「保存」を押させないためのフラグ（同じメモが2件できるのを防ぐ）
   const [saved, setSaved] = useState(false)
   // プレビュー用に作った blob URL。差し替え時と後片付けで revoke する。
@@ -194,6 +197,7 @@ function NewNoteContent() {
 
     setSaving(true)
     setPhotoWarning(null)
+    setMessage(null)
     // session_id は互換のため引き続き保存する（絞り込みには user_id を使う）
     const sessionId = getSessionId()
 
@@ -239,7 +243,10 @@ function NewNoteContent() {
       }
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: null }))
-        alert(`保存に失敗しました: ${error ?? "時間を置いてお試しください"}`)
+        setMessage({
+          type: "error",
+          text: `保存に失敗しました: ${error ?? "時間を置いてお試しください"}`,
+        })
         setSaving(false)
         return
       }
@@ -254,11 +261,14 @@ function NewNoteContent() {
         return
       }
 
-      alert(editId ? "ノートを更新しました" : "ノートを保存しました")
-      router.push("/my-notes")
+      // 保存画面はすぐ離れるので、成功の帯は一覧で出す（?saved= で一覧に伝える）
+      router.push(`/my-notes?saved=${editId ? "updated" : "created"}`)
     } catch (err) {
       console.error("Save error:", err)
-      alert(`保存に失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}`)
+      setMessage({
+        type: "error",
+        text: `保存に失敗しました: ${err instanceof Error ? err.message : "不明なエラー"}`,
+      })
     } finally {
       setSaving(false)
     }
@@ -310,18 +320,22 @@ function NewNoteContent() {
         )}
       </div>
 
+      {/* 帯は space-y-5 の外に置く。中に置くと下側の余白が付いて、一覧の帯より上にずれる */}
+      {message && (
+        <MessageBanner message={message} onClose={() => setMessage(null)} />
+      )}
+      {photoWarning && (
+        <div className={`${BANNER_POSITION} shadow-lg rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 break-words`}>
+          {photoWarning}
+          <button
+            onClick={() => router.push("/my-notes")}
+            className="block mt-2 font-semibold underline"
+          >
+            メモ一覧へ
+          </button>
+        </div>
+      )}
       <div className="px-4 py-4 space-y-5">
-        {photoWarning && (
-          <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-xl shadow-lg rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800 break-words">
-            {photoWarning}
-            <button
-              onClick={() => router.push("/my-notes")}
-              className="block mt-2 font-semibold underline"
-            >
-              メモ一覧へ
-            </button>
-          </div>
-        )}
         {/* Plant selector */}
         <div>
           <label className="text-sm font-semibold mb-2 block">
