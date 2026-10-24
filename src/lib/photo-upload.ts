@@ -12,6 +12,7 @@
 
 import imageCompression from "browser-image-compression"
 import { supabase } from "./supabase"
+import { COMPRESSION_OPTIONS } from "./image-compression"
 
 export type PhotoUploadFailure = {
   fileName: string
@@ -39,8 +40,7 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024
 const BUCKET = "visitor-notes"
 const UPLOAD_URL_ENDPOINT = "/api/visitor-notes/upload-url"
 
-// 圧縮の既定値。herb-garden 版はここだけ { maxSizeMB: 2, maxWidthOrHeight: 1920 } になっている。
-const COMPRESSION_OPTIONS = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true }
+// 圧縮の設定（COMPRESSION_OPTIONS）は、お知らせの画像と共用するため image-compression.ts に置いている。
 
 // 画面に並べる失敗の件数。これを超えた分は「ほか◯件」にまとめる（Console には全件出る）。
 const MAX_LISTED_FAILURES = 3

@@ -15,6 +15,7 @@ import {
   Truck,
 } from "lucide-react"
 import { mapNewsRowToItem, type NewsItem, type NewsRow } from "@/data/news"
+import { newsImageUrl } from "@/lib/news-image"
 
 const CATEGORY_COLOR: Record<string, string> = {
   "イベント": "bg-amber-100 text-amber-600",
@@ -127,11 +128,11 @@ export default function NewsDetailPage({
       </div>
 
       <div className="px-4 py-5 space-y-4">
-        {/* フライヤー画像スロット */}
+        {/* お知らせの画像（plant-photos バケットの news/ 以下。職員画面から付ける） */}
         {item.imagePath ? (
           <div className="rounded-2xl overflow-hidden shadow-sm">
             <Image
-              src={`/images/news/${item.imagePath}`}
+              src={newsImageUrl(item.imagePath)}
               alt={item.title}
               width={600}
               height={400}

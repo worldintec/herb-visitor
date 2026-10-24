@@ -1,9 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { ShieldCheck, LogOut, ArrowLeft, Bell, Calendar, Pencil, Trash2 } from "lucide-react"
 import type { NewsCategory, NewsRow } from "@/data/news"
+import { newsImageUrl } from "@/lib/news-image"
+import { checkNewsImageFile, uploadNewsImage } from "@/lib/staff-image-upload"
 
 const NEWS_CATEGORIES: NewsCategory[] = ["イベント", "お知らせ", "更新情報"]
 
@@ -38,6 +41,22 @@ export default function StaffNewsPage() {
   const [notifyResult, setNotifyResult] = useState<{ sent: number; removed: number } | null>(
     null
   )
+
+  // ---- 画像（任意・1枚） ----
+  // 新しく選んだファイルと、そのプレビュー用の blob URL
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  // 編集中のお知らせに、すでに付いている画像のパス
+  const [existingImagePath, setExistingImagePath] = useState<string | null>(null)
+  // 編集で「画像を削除する」が押されたか
+  const [removeExistingImage, setRemoveExistingImage] = useState(false)
+  const [imageError, setImageError] = useState<string | null>(null)
+  // 送信中の段階。画像を送っている間とお知らせを保存している間で表示を変える
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const previewUrlRef = useRef<string | null>(null)
+  // 画像は送れたのにお知らせの保存が失敗したとき、やり直しで同じ画像を送り直さないよう控える
+  const uploadedRef = useRef<{ file: File; path: string } | null>(null)
 
   useEffect(() => {
     fetch("/api/staff/me")
@@ -82,7 +101,46 @@ export default function StaffNewsPage() {
     window.location.href = "/staff/login"
   }
 
+  const setPreview = (url: string | null) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    previewUrlRef.current = url
+    setImagePreview(url)
+  }
+
+  // 画面を離れるときに blob URL を片付ける
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    }
+  }, [])
+
+  const clearNewImage = () => {
+    setImageFile(null)
+    setPreview(null)
+    setImageError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const invalid = checkNewsImageFile(file)
+    if (invalid) {
+      // 選び直せるように、前に選んでいた画像はそのまま残す
+      setImageError(invalid)
+      e.target.value = ""
+      return
+    }
+    setImageError(null)
+    setImageFile(file)
+    setPreview(URL.createObjectURL(file))
+  }
+
   const resetForm = () => {
+    clearNewImage()
+    setExistingImagePath(null)
+    setRemoveExistingImage(false)
+    uploadedRef.current = null
     setEditingId(null)
     setNotifyResult(null)
     setCategory("お知らせ")
@@ -100,6 +158,27 @@ export default function StaffNewsPage() {
     setSubmitError(null)
     setNotifyResult(null)
     try {
+      // 画像は3通り。項目を送らない＝変えない／文字列＝差し替え・付ける／null＝外す
+      let imageField: { imagePath?: string | null } = {}
+      if (imageFile) {
+        // 先に画像を送る。失敗したらお知らせは保存せず、入力はフォームに残す
+        let path = uploadedRef.current?.file === imageFile ? uploadedRef.current.path : null
+        if (!path) {
+          setUploadingImage(true)
+          const result = await uploadNewsImage(imageFile)
+          setUploadingImage(false)
+          if (!result.ok) {
+            setSubmitError(result.error)
+            return
+          }
+          path = result.path
+          uploadedRef.current = { file: imageFile, path }
+        }
+        imageField = { imagePath: path }
+      } else if (editingId && removeExistingImage && existingImagePath) {
+        imageField = { imagePath: null }
+      }
+
       const res = await fetch(editingId ? `/api/staff/news/${editingId}` : "/api/staff/news", {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,6 +189,7 @@ export default function StaffNewsPage() {
           body: body.trim(),
           publishedAt,
           isPublished,
+          ...imageField,
         }),
       })
       const json = await res.json()
@@ -129,11 +209,16 @@ export default function StaffNewsPage() {
     } catch {
       setSubmitError("通信エラーが発生しました")
     } finally {
+      setUploadingImage(false)
       setSubmitting(false)
     }
   }
 
   const handleEdit = (item: NewsRow) => {
+    clearNewImage()
+    setExistingImagePath(item.image_path)
+    setRemoveExistingImage(false)
+    uploadedRef.current = null
     setEditingId(item.id)
     setCategory(item.category)
     setPublishedAt(item.published_at)
@@ -247,6 +332,100 @@ export default function StaffNewsPage() {
             className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm outline-none focus:border-slate-500 resize-none"
           />
 
+          {/* 画像（任意） */}
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-slate-500">画像（任意）</p>
+            {(() => {
+              const showExisting = !imageFile && !!existingImagePath && !removeExistingImage
+              const src = imagePreview ?? (showExisting ? newsImageUrl(existingImagePath!) : null)
+              return src ? (
+                <Image
+                  src={src}
+                  alt="お知らせの画像"
+                  width={240}
+                  height={160}
+                  className="h-32 w-auto max-w-full rounded-lg border border-slate-200 object-cover"
+                  // 選びたての画像は blob URL で、最適化を通せない
+                  unoptimized
+                />
+              ) : null
+            })()}
+            {editingId && existingImagePath && removeExistingImage && !imageFile && (
+              <p className="text-xs text-slate-500">更新すると、いまの画像は削除されます。</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {imageFile ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={submitting}
+                    className="h-9 px-3 rounded-lg border border-slate-300 text-slate-600 text-sm disabled:opacity-50"
+                  >
+                    選び直す
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearNewImage}
+                    disabled={submitting}
+                    className="h-9 px-3 rounded-lg border border-slate-300 text-slate-600 text-sm disabled:opacity-50"
+                  >
+                    {editingId && existingImagePath && !removeExistingImage ? "変更をやめる" : "画像を外す"}
+                  </button>
+                </>
+              ) : editingId && existingImagePath && !removeExistingImage ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={submitting}
+                    className="h-9 px-3 rounded-lg border border-slate-300 text-slate-600 text-sm disabled:opacity-50"
+                  >
+                    画像を変える
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRemoveExistingImage(true)}
+                    disabled={submitting}
+                    className="h-9 px-3 rounded-lg border border-slate-300 text-rose-600 text-sm disabled:opacity-50"
+                  >
+                    画像を削除する
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={submitting}
+                    className="h-9 px-3 rounded-lg border border-slate-300 text-slate-600 text-sm disabled:opacity-50"
+                  >
+                    画像を選ぶ
+                  </button>
+                  {editingId && existingImagePath && removeExistingImage && (
+                    <button
+                      type="button"
+                      onClick={() => setRemoveExistingImage(false)}
+                      disabled={submitting}
+                      className="h-9 px-3 rounded-lg border border-slate-300 text-slate-600 text-sm disabled:opacity-50"
+                    >
+                      削除を取り消す
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            <p className="text-xs text-slate-400">jpg・png・webp、10MB まで</p>
+            {imageError && <p className="text-red-500 text-sm">{imageError}</p>}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
@@ -278,7 +457,13 @@ export default function StaffNewsPage() {
               disabled={submitting || !title.trim()}
               className="flex-1 h-10 rounded-lg bg-slate-800 text-white text-sm font-semibold disabled:opacity-50"
             >
-              {submitting ? "送信中..." : editingId ? "更新する" : "登録する"}
+              {uploadingImage
+                ? "画像を送っています..."
+                : submitting
+                  ? "送信中..."
+                  : editingId
+                    ? "更新する"
+                    : "登録する"}
             </button>
             {editingId && (
               <button

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { getStaffSession } from "@/lib/staff-auth"
 import { broadcastPush } from "@/lib/web-push"
+import { isNewsImagePath } from "@/lib/news-image"
 import type { NewsCategory, NewsRow } from "@/data/news"
 
 export const dynamic = "force-dynamic"
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  const { category, title, summary, body, publishedAt, isPublished } = await request.json()
+  const { category, title, summary, body, publishedAt, isPublished, imagePath } =
+    await request.json()
 
   if (!NEWS_CATEGORIES.includes(category)) {
     return NextResponse.json({ error: "カテゴリが不正です" }, { status: 400 })
@@ -63,6 +65,10 @@ export async function POST(request: NextRequest) {
   }
   if (typeof publishedAt !== "string" || !DATE_PATTERN.test(publishedAt)) {
     return NextResponse.json({ error: "日付が不正です" }, { status: 400 })
+  }
+  // 画像は任意。送られてきたときは news/○○ の形だけを受け付ける（lib/news-image.ts）
+  if (imagePath != null && !isNewsImagePath(imagePath)) {
+    return NextResponse.json({ error: "画像の指定が不正です" }, { status: 400 })
   }
 
   const supabase = getSupabase()
@@ -75,6 +81,7 @@ export async function POST(request: NextRequest) {
       body: typeof body === "string" ? body.trim() : "",
       published_at: publishedAt,
       is_published: Boolean(isPublished),
+      image_path: imagePath ?? null,
       created_by: staffSession.staffId,
     })
     .select("id, category, title, summary, body, image_path, published_at, is_published")

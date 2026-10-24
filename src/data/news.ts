@@ -7,7 +7,7 @@ export interface NewsItem {
   publishedAt: string   // YYYY-MM-DD
   summary: string
   content: NewsContent
-  imagePath?: string    // /images/news/ 以下のパス（オプション）
+  imagePath?: string    // Storage（plant-photos）の news/ 以下のパス（オプション）
 }
 
 export interface NewsContent {
