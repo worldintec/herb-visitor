@@ -438,25 +438,31 @@ function NewNoteContent() {
         <div>
           <label className="text-sm font-semibold mb-2 block">写真</label>
           {photoPreview ? (
-            <div className="relative rounded-2xl overflow-hidden">
-              <Image
-                src={photoPreview}
-                alt="プレビュー"
-                width={400}
-                height={300}
-                className="w-full h-48 object-cover"
-                // 既存の写真を出すときは /api/visitor-notes/[id]/photo になる。
-                // 画像最適化を通すとクッキーが送られず 401 になり、さらに
-                // /_next/image に公開でキャッシュされてしまう。
-                // 撮りたての写真は blob URL で、こちらは元から最適化されない。
-                unoptimized
-              />
-              <button
-                onClick={removePhoto}
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
-              >
-                <X size={16} />
-              </button>
+            // 写真は切り取らずに全体を出す（一覧のサムネイルは切り取ったまま）。
+            // 枠の幅はそのままで、高さは写真に合わせる。縦長の写真は画面の高さの6割で止め、
+            // 左右の余白には枠の背景色が見える。× は写真の右上に置くため、写真だけを包む
+            // 内側の箱（relative）に入れている。
+            <div className="rounded-2xl overflow-hidden bg-green-50 border border-herb-border flex justify-center">
+              <div className="relative min-w-0 max-w-full">
+                <Image
+                  src={photoPreview}
+                  alt="プレビュー"
+                  width={400}
+                  height={300}
+                  className="block w-auto h-auto max-w-full max-h-[60dvh]"
+                  // 既存の写真を出すときは /api/visitor-notes/[id]/photo になる。
+                  // 画像最適化を通すとクッキーが送られず 401 になり、さらに
+                  // /_next/image に公開でキャッシュされてしまう。
+                  // 撮りたての写真は blob URL で、こちらは元から最適化されない。
+                  unoptimized
+                />
+                <button
+                  onClick={removePhoto}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
           ) : (
             <button
