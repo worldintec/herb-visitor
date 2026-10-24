@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { notFound } from "next/navigation"
 import {
   ArrowLeft,
   Calendar,
@@ -15,13 +14,17 @@ import {
   ShoppingBag,
   Truck,
 } from "lucide-react"
-import { newsList, mapNewsRowToItem, type NewsItem, type NewsRow } from "@/data/news"
+import { mapNewsRowToItem, type NewsItem, type NewsRow } from "@/data/news"
 
 const CATEGORY_COLOR: Record<string, string> = {
   "イベント": "bg-amber-100 text-amber-600",
   "お知らせ": "bg-sky-100 text-sky-500",
   "更新情報": "bg-green-100 text-herb-primary",
 }
+
+const NOT_FOUND_TEXT = "このお知らせは見つかりませんでした。"
+// 取得に失敗したときの文言（一覧と同じ）。詳細は console.error にだけ出す。
+const LOAD_ERROR = "お知らせを読み込めませんでした。電波の状態をご確認のうえ、もう一度お試しください。"
 
 function formatDate(dateStr: string) {
   const [y, m, d] = dateStr.split("-")
@@ -34,27 +37,64 @@ export default function NewsDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const staticItem = newsList.find((n) => n.id === id)
-  const [dbItem, setDbItem] = useState<NewsItem | null>(null)
-  const [notFoundState, setNotFoundState] = useState(false)
+  const [item, setItem] = useState<NewsItem | null>(null)
+  // 取得できなかった理由。API が 404・500 を返したときは「見つからない」として扱う
+  // （uuid でない ID を渡すと 500 になるため、どちらも同じ画面に寄せる）。
+  // 通信そのものの失敗は、お知らせが無いとは限らないので分ける。
+  const [failure, setFailure] = useState<"not-found" | "network" | null>(null)
 
   useEffect(() => {
-    if (staticItem) return
     fetch(`/api/news/${id}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("not found")
-        return r.json()
+      .then(async (r) => {
+        if (!r.ok) {
+          console.error(`[news] お知らせが見つかりません: id=${id} status=${r.status}`)
+          setFailure("not-found")
+          return
+        }
+        const { news }: { news: NewsRow } = await r.json()
+        setItem(mapNewsRowToItem(news))
       })
-      .then(({ news }: { news: NewsRow }) => setDbItem(mapNewsRowToItem(news)))
-      .catch(() => setNotFoundState(true))
-    // staticItem は初回レンダー時の値から変わらないため依存配列に含めない
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .catch((err) => {
+        console.error(`[news] お知らせの取得に失敗しました: id=${id}`, err)
+        setFailure("network")
+      })
   }, [id])
 
-  const item = staticItem ?? dbItem
   if (!item) {
-    if (notFoundState) notFound()
-    return <div className="min-h-dvh" />
+    return (
+      <div className="min-h-dvh">
+        <div className="hero-gradient px-5 pt-10 pb-6 rounded-b-3xl">
+          <Link
+            href="/news"
+            className="inline-flex items-center gap-1 text-white/80 text-sm"
+          >
+            <ArrowLeft size={18} />
+            お知らせ一覧
+          </Link>
+        </div>
+        <div className="px-4 py-5">
+          {failure ? (
+            <div className="text-center py-16">
+              <p className="text-sm text-herb-text-secondary leading-relaxed mb-6">
+                {failure === "not-found" ? NOT_FOUND_TEXT : LOAD_ERROR}
+              </p>
+              <Link
+                href="/news"
+                className="inline-flex items-center gap-1.5 bg-herb-primary text-white rounded-xl px-6 h-12 text-sm font-semibold shadow-md"
+              >
+                お知らせ一覧へ
+              </Link>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl p-4 shadow-sm animate-pulse">
+              <div className="h-4 bg-green-100 rounded w-1/3 mb-2" />
+              <div className="h-3 bg-green-50 rounded w-full mb-1" />
+              <div className="h-3 bg-green-50 rounded w-2/3" />
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   const { content } = item
