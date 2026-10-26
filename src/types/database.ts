@@ -25,14 +25,13 @@ export interface Plant {
   created_at: string
 }
 
+// /api/plant-photos が返す形。テーブルには uploaded_by・uploaded_at もあるが返さない。
 export interface PlantPhoto {
   // 実DBは uuid。以前 number と定義されていたのは誤り。
   id: string
   plant_name: string
   storage_path: string
   caption: string | null
-  uploaded_by: string | null
-  uploaded_at: string
 }
 
 export interface PlantPosition {

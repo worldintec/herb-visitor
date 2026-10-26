@@ -7,7 +7,6 @@ export const dynamic = "force-dynamic"
 export interface PlantNoteRow {
   id: string
   content: string
-  author: string | null
   created_at: string
 }
 
@@ -19,7 +18,8 @@ export interface PlantNoteRow {
  *   plantName  その植物のノートを created_at の降順で返す（必須）
  *   nonEmpty   "1" のとき、content が空のものを除く
  *
- * 来園者に見せるのは本文・記録者・日付だけで、内部IDや更新日時は返さない。
+ * 返すのは id（画面の key に使う）・本文・日付だけ。
+ * author（記入した職員の名前）は来園者に見せないので返さない。更新日時も返さない。
  */
 export async function GET(request: NextRequest) {
   const session = await getSession()
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   let query = supabase
     .from("plant_notes")
-    .select("id, content, author, created_at")
+    .select("id, content, created_at")
     .eq("plant_name", plantName)
 
   if (nonEmpty) query = query.not("content", "is", null).neq("content", "")

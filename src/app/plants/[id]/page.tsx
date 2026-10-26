@@ -29,7 +29,6 @@ import GardenRuleNotice from "@/components/garden-rule-notice"
 interface PlantNote {
   id: string
   content: string
-  author: string | null
   created_at: string
 }
 

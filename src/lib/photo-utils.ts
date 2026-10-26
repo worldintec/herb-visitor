@@ -1,12 +1,11 @@
 // 植物写真のキャプション優先順位制御
 
+// /api/plant-photos が返す形（types/database.ts の PlantPhoto と同じ）
 export interface PlantPhoto {
   id: string
   plant_name: string
   storage_path: string
   caption: string | null
-  uploaded_by: string | null
-  uploaded_at: string
 }
 
 // キャプション優先順位（数値が小さいほど優先度高）
