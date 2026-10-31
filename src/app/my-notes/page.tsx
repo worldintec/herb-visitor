@@ -14,6 +14,7 @@ import {
   Calendar,
   Leaf,
   LogOut,
+  ChevronRight,
 } from "lucide-react"
 import type { VisitorNote } from "@/types/database"
 import MessageBanner, { type BannerMessage } from "@/components/message-banner"
@@ -211,7 +212,19 @@ export default function MyNotesPage() {
                 <div className="p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      {note.plant_name && (
+                      {/* 植物を選んで書いたノートは、植物名の札からその植物のページへ行ける。
+                          リンクと分かるよう、枠線と「›」を付ける */}
+                      {note.plant_name && note.plant_id && (
+                        <Link
+                          href={`/plants/${note.plant_id}`}
+                          className="inline-flex items-center gap-1 bg-green-100 text-herb-primary border border-herb-primary/40 rounded-sm pl-2 pr-1 py-0.5 text-xs font-medium mb-1 active:bg-green-200 transition-colors"
+                        >
+                          <Leaf size={10} />
+                          {note.plant_name}
+                          <ChevronRight size={12} />
+                        </Link>
+                      )}
+                      {note.plant_name && !note.plant_id && (
                         <span className="inline-flex items-center gap-1 bg-green-100 text-herb-primary rounded-sm px-2 py-0.5 text-xs font-medium mb-1">
                           <Leaf size={10} />
                           {note.plant_name}
