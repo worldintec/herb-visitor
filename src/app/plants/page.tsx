@@ -9,6 +9,7 @@ import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
 import FavoriteButton from "@/components/favorite-button"
 import { useFavorites } from "@/hooks/useFavorites"
+import { useScrollRestore } from "@/hooks/useScrollRestore"
 
 export default function PlantsPage() {
   const [plants, setPlants] = useState<Plant[]>([])
@@ -21,6 +22,22 @@ export default function PlantsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const { favoriteIds, isFavorite } = useFavorites()
+
+  // 植物ページから「戻る」で戻ったとき、スクロール位置と絞り込みを元に戻す
+  const listState = useMemo(
+    () => ({ searchQuery, selectedArea, selectedCategory, favoritesOnly, showFilters }),
+    [searchQuery, selectedArea, selectedCategory, favoritesOnly, showFilters]
+  )
+  useScrollRestore("plants", !loading, {
+    extra: listState,
+    onRestoreExtra: (s) => {
+      setSearchQuery(s.searchQuery)
+      setSelectedArea(s.selectedArea)
+      setSelectedCategory(s.selectedCategory)
+      setFavoritesOnly(s.favoritesOnly)
+      setShowFilters(s.showFilters)
+    },
+  })
 
   useEffect(() => {
     async function fetchData() {

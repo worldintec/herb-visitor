@@ -9,6 +9,7 @@ import { fetchPlantPositions, MAP_LOAD_ERROR } from "@/lib/map-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
+import { useScrollRestore } from "@/hooks/useScrollRestore"
 
 type PlantPos = { name: string; x: number; y: number }
 
@@ -60,9 +61,8 @@ export default function AreaDetailPage({
   // 配置マップの取得失敗。植物リストの表示は続けたいので loadError とは分けて持つ。
   const [positionsError, setPositionsError] = useState<string | null>(null)
 
-  useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [])
+  // 植物ページから「戻る」で戻ったときは元の位置へ。新しく開いたときは先頭から見せる
+  useScrollRestore(`areas/${areaId}`, !loading, { scrollTopOnFresh: true })
 
   useEffect(() => {
     async function fetchData() {

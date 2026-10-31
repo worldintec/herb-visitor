@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import type { VisitorNote } from "@/types/database"
 import MessageBanner, { type BannerMessage } from "@/components/message-banner"
+import { useScrollRestore } from "@/hooks/useScrollRestore"
 
 // 保存画面から ?saved= で渡される印と、そのときに出す文言
 const SAVED_MESSAGES: Record<string, string> = {
@@ -35,6 +36,8 @@ export default function MyNotesPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
   const [message, setMessage] = useState<BannerMessage | null>(null)
+  // 植物ページや編集画面から「戻る」で戻ったとき、元のスクロール位置へ
+  useScrollRestore("my-notes", !loading)
 
   // 保存画面から戻ってきたときの「保存しました」。
   // 出したら印を URL から消す（replaceState なので履歴にも残らない）。

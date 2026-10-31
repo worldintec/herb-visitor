@@ -10,6 +10,7 @@ import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
 import PushSubscribeButton from "@/components/push-subscribe-button"
 import GardenRuleNotice from "@/components/garden-rule-notice"
+import { useScrollRestore } from "@/hooks/useScrollRestore"
 
 const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
 
@@ -52,6 +53,8 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // 植物ページから「戻る」で戻ったとき、元のスクロール位置へ
+  useScrollRestore("home", !loading)
   // 月をまたいでタブ/PWAを開きっぱなしにしても表示が更新されるよう、
   // レンダー時の決め打ちではなく再表示時に再計算する
   const [currentMonth, setCurrentMonth] = useState(() => getMonth(new Date()) + 1)
