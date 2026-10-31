@@ -64,34 +64,6 @@ const ROTATE_CY = (IMAGE_TOP + FLOOR_IMAGE.y + FLOOR_IMAGE.h) / 2 // 図面の�
 // 引き出し図はこれより下に置き、園の輪郭にかぶせない。
 const OUTLINE_BOTTOM_LEFT = 132
 
-// 回したあとの図面で、園の輪郭の内側の上端と下端（図面の上端からの距離）。x=10 から 20 ごと。
-// 2026年11月に図面の画像（public/ハーブ園図面加工後.png）から、各列のいちばん上といちばん下の
-// 線（小さな汚れの点は除く）を拾って測った値。輪郭の線が途切れている所があるため、
-// 外側からの塗りつぶしでは測れなかった。中央の建物のあたりは粗いが、左半分は輪郭に沿う。
-// 「T」の印を輪郭の内側に収めるのに使う。
-const OUTLINE_INNER_TOP = [
-  62, 45, 36, 28, 24, 19, 16, 14, 28, 25, 25, 34, 29, 44, 52, 57, 66, 119, 156, 39,
-  14, 14, 14, 14, 37, 54, 14, 14, 27, 36, 32, 15, 15, 47, 15, 14, 15, 19, 34, 34,
-  15, 14, 15, 15, 15, 15, 15, 15, 15, 14,
-]
-const OUTLINE_INNER_BOTTOM = [
-  82, 99, 109, 115, 117, 117, 116, 113, 111, 110, 109, 111, 115, 121, 134, 151, 161, 192, 205, 211,
-  152, 188, 188, 209, 199, 183, 158, 147, 131, 118, 107, 98, 91, 86, 84, 82, 84, 87, 93, 102,
-  114, 127, 144, 155, 139, 89, 89, 80, 60, 211,
-]
-
-// x の前後 half の範囲で、輪郭の内側に入る y の範囲（回したあとの座標）。入らなければ null
-function outlineInnerRange(x: number, half: number): { top: number; bottom: number } | null {
-  let top = -Infinity
-  let bottom = Infinity
-  for (let xx = x - half; xx <= x + half; xx += 5) {
-    const i = Math.min(Math.max(Math.round((xx - FLOOR_IMAGE.x) / 20), 0), OUTLINE_INNER_TOP.length - 1)
-    top = Math.max(top, IMAGE_TOP + OUTLINE_INNER_TOP[i])
-    bottom = Math.min(bottom, IMAGE_TOP + OUTLINE_INNER_BOTTOM[i])
-  }
-  return top < bottom ? { top, bottom } : null
-}
-
 // ─── 位置の手がかり（歩道・用水路・神社・トイレ・駐車場・方角） ─────────────────
 // 園の輪郭の外の余白に、エリア名より小さく薄く描く。主役はエリア。
 // 用水路・神社とトイレ・駐車場は園に接していないので、矢印で「その方向の先」を示す。
@@ -101,21 +73,26 @@ const SIDE_BLOCK_HALF = 16 // 左右の手がかり（縦書き＋短い矢印�
 const SIDE_GAP = 10 // いちばん外のエリアの枠と、左右の手がかりのあいだ
 const SIDE_EDGE = 8 // 左右の手がかりと、描画領域の端のあいだ
 
-// ─── T（ミント園）の引き出し図 ─────────────────────────────────────────────────
-// ミント園は U の左上（園の輪郭の内側）にあるが小さいので、拡大して別枠で出す。
-// その位置に小さな「T」の印を置き、引き出し図と細い実線でつなぐ。
+// ─── T（ミント園）の区画と引き出し図 ───────────────────────────────────────────
+// ミント園の園内での位置は map_plots にも zone_offsets にも無い（T は最初から別枠で描く作り）。
+// 元の平面図ではミント園は網目の細長い四角で描かれ、そこから拡大図へ引き出し線が伸びている。
+// その四角を水色で塗り分け、左下の引き出し図と細い実線でつなぐ。
+//
+// 位置は元の平面図（PDF）から割合で測った値（2026年11月）。背景の画像（加工後）からは
+// 網目が消えているため、画像からは読み取れない。現地で確かめて動かすときは、この1行を直す。
+//   cx, cy … 回したあとの図面での中心（図面の左端・上端からの割合）
+//   w, h   … 長さと幅（図の単位）　angle … 傾き（度。時計回りが正）
+const MINT_AREA = { cx: 0.278, cy: 0.516, w: 42, h: 10, angle: 25 }
+const MINT_FILL = "rgba(56,189,248,0.22)" // 薄い水色。点（緑・ピンク・紺）と紛れない色
+const MINT_STROKE = "#0ea5e9" // 塗りより少し濃い水色の輪郭（樹木の点の紺とは明るさで分ける）
 const INSET_X = FLOOR_IMAGE.x + 4 // 引き出し図の左端
 const INSET_MAX_W = 248 // 中身（T の枠）の幅の上限。左下の空きに収める
 const INSET_MAX_H = 150 // 中身の高さの上限（図面の下にはみ出してよい）
 const INSET_PAD = 8
 const INSET_HEADER = 26 // 見出し「T ミント園（拡大図）」の行
 const INSET_COLOR = "#4f6f63"
-// U の左上に置く「T」の印の半径。幅390px の画面（約0.26〜0.3倍）で直径7〜8px ほど
-const MARKER_R = 14
-// 印の中心から U の枠の左上の角まで（縦横それぞれ）。円の縁が角に触れる位置
-const MARKER_GAP = Math.round(MARKER_R * 0.7)
-// 引き出し線の太さは画面上の px で決める（vector-effect="non-scaling-stroke"）。
-// 図の単位で 2 にすると、幅390px では 0.5〜0.6px になって線が消えかかるため
+// 引き出し線と区画の輪郭の太さは画面上の px で決める（vector-effect="non-scaling-stroke"）。
+// 図の単位で決めると、幅390px（約0.26〜0.3倍）では 1px に届かず線が消えかかるため
 const LEADER_WIDTH_PX = 1.5
 
 type Rect = { x: number; y: number; w: number; h: number }
@@ -604,34 +581,35 @@ export default function HerbGardenFloorMap() {
   )
   const insetRot: Rect = { x: INSET_X, y: insetTop, w: insetW, h: insetH }
 
-  // 「T」の印：ミント園の実際の位置（回したあとの地図で U の左上に隣接、園の輪郭の内側）に
-  // 固定する。円の縁が U の枠の左上の角に触れる位置に置く。
-  // 図面の画像で細かいマス目が描かれているのは左端（W の先）の1か所だけで、この位置とは
-  // 合わないため、画像からは読み取らずに U の枠を基準にしている。
-  // U の枠が輪郭の上にはみ出している場合は、そのまま角に置くと輪郭の外に出るので、
-  // 輪郭の内側に入るところまで下げる（入らなければ U のほうへ寄せる）
-  const uFrame = rotFrames.get("U")!
-  const markerRot: Point = (() => {
-    const want = { x: uFrame.x - MARKER_GAP, y: uFrame.y - MARKER_GAP }
-    const margin = MARKER_R + 2
-    for (let x = want.x; x <= uFrame.x + uFrame.w; x += 4) {
-      const range = outlineInnerRange(x, MARKER_R)
-      if (!range || range.top + margin > range.bottom - margin) continue
-      return { x, y: Math.min(Math.max(want.y, range.top + margin), range.bottom - margin) }
-    }
-    return want
-  })()
-  // 引き出し線：印から引き出し図の上辺へ。上辺のどこにつなぐかは、線がほかの枠・点・
-  // エリア名に当たる数がいちばん少ないところ（同じなら線が短いほう）にする
+  // ミント園の区画（回したあとの座標）。中心と四隅
+  const mintCenterRot: Point = {
+    x: FLOOR_IMAGE.x + MINT_AREA.cx * FLOOR_IMAGE.w,
+    y: IMAGE_TOP + MINT_AREA.cy * FLOOR_IMAGE.h,
+  }
+  const mintAngle = (MINT_AREA.angle * Math.PI) / 180
+  const mintPoint = (u: number, v: number): Point => ({
+    x: mintCenterRot.x + u * Math.cos(mintAngle) - v * Math.sin(mintAngle),
+    y: mintCenterRot.y + u * Math.sin(mintAngle) + v * Math.cos(mintAngle),
+  })
+  // 引き出し線の出発点の候補：四隅と各辺の中点
+  const hw = MINT_AREA.w / 2
+  const hh = MINT_AREA.h / 2
+  const mintStarts = [
+    mintPoint(-hw, -hh), mintPoint(hw, -hh), mintPoint(hw, hh), mintPoint(-hw, hh),
+    mintPoint(0, -hh), mintPoint(hw, 0), mintPoint(0, hh), mintPoint(-hw, 0),
+  ]
+
+  // 引き出し線：区画から引き出し図の上辺へ。出発点と上辺のつなぎ先は、線がほかの枠・点・
+  // エリア名に当たる数がいちばん少ない組み合わせ（同じなら線が短いほう）にする
   const attachCandidates: Point[] = []
   for (let x = insetRot.x + 16; x <= insetRot.x + insetRot.w - 16; x += 8) {
     attachCandidates.push({ x, y: insetRot.y })
   }
-  const best = attachCandidates
-    .map((a) => {
-      // 線は U の枠のそばから出るので、U の枠は数えない
-      const hits = obstacles.filter((o) => o !== uFrame && segmentHitsRect(markerRot, a, o)).length
-      return { a, cost: hits * 10 + Math.hypot(a.x - markerRot.x, a.y - markerRot.y) / 1000 }
+  const best = mintStarts
+    .flatMap((m) => attachCandidates.map((a) => ({ m, a })))
+    .map(({ m, a }) => {
+      const hits = obstacles.filter((o) => segmentHitsRect(m, a, o)).length
+      return { m, a, cost: hits * 10 + Math.hypot(a.x - m.x, a.y - m.y) / 1000 }
     })
     .reduce((x, y) => (y.cost < x.cost ? y : x))
 
@@ -648,8 +626,10 @@ export default function HerbGardenFloorMap() {
     w: tFrameRot.w * insetScale,
     h: tFrameRot.h * insetScale,
   }
-  const marker = toShown(markerRot)
+  const leaderStart = toShown(best.m)
   const attach = toShown(best.a)
+  // 区画は図面と同じ回転の中に描くので、元の向きの座標で持つ（回転を切ると点対称に移る）
+  const mintCenterOrig = rotPoint(mintCenterRot)
   // 引き出し図の中身：T の枠（元の向き）を、回して（または回さずに）縮めて枠の中へ
   const tFrame = zoneFrame("T")
   const insetTransform = ROTATE_FLOOR_MAP_180
@@ -728,6 +708,20 @@ export default function HerbGardenFloorMap() {
               className="pointer-events-none"
             />
 
+            {/* T（ミント園）の区画。枠と点より下に描き、点を隠さない */}
+            <rect
+              x={-MINT_AREA.w / 2}
+              y={-MINT_AREA.h / 2}
+              width={MINT_AREA.w}
+              height={MINT_AREA.h}
+              transform={`translate(${mintCenterOrig.x} ${mintCenterOrig.y}) rotate(${MINT_AREA.angle})`}
+              fill={MINT_FILL}
+              stroke={MINT_STROKE}
+              strokeWidth={LEADER_WIDTH_PX}
+              vectorEffect="non-scaling-stroke"
+              className="pointer-events-none"
+            />
+
             {/* ゾーン（面積降順で描画） */}
             {ZONES_BY_SIZE.filter((zone) => zone !== "T").map(renderZone)}
 
@@ -767,28 +761,15 @@ export default function HerbGardenFloorMap() {
             </g>
           </g>
 
-          {/* T（ミント園）の引き出し図。U の左上の印から細い実線で引き出す */}
+          {/* T（ミント園）の引き出し図。区画から細い実線で引き出す */}
           <line
-            x1={marker.x} y1={marker.y} x2={attach.x} y2={attach.y}
+            x1={leaderStart.x} y1={leaderStart.y} x2={attach.x} y2={attach.y}
             stroke={INSET_COLOR}
             strokeWidth={LEADER_WIDTH_PX}
             vectorEffect="non-scaling-stroke"
             strokeLinecap="round"
             className="pointer-events-none"
           />
-          <g className="pointer-events-none select-none">
-            <circle cx={marker.x} cy={marker.y} r={MARKER_R} fill="#ffffff" stroke={INSET_COLOR} strokeWidth={2} />
-            <text
-              x={marker.x} y={marker.y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fontSize={17}
-              fontWeight={700}
-              fill={INSET_COLOR}
-            >
-              T
-            </text>
-          </g>
           {/* 引き出した枠は実線・白地にして、エリアの破線の枠と見分ける */}
           <rect
             x={inset.x} y={inset.y} width={inset.w} height={inset.h}
