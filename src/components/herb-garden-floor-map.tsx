@@ -39,6 +39,24 @@ const ZONES_BY_SIZE = [...ZONES].sort(
     ZONE_AREAS[b].w * ZONE_AREAS[b].h - ZONE_AREAS[a].w * ZONE_AREAS[a].h
 )
 
+// ─── 地図の向き ─────────────────────────────────────────────────────────────────
+// 園内で立つ向き（駐車場側が下、A エリアが右）に合わせて、図面・枠・点を180度回して描く。
+// 座標のデータ（map_plots・zone_offsets・ZONE_AREAS）は元の向きのまま。
+// 文字（エリア名・ミント園）は回さず、回した先の位置に正立で置く。
+// 元の向きに戻すときは false にする。エリア詳細の配置マップは areas/[id]/page.tsx で別に切り替える。
+const ROTATE_FLOOR_MAP_180 = true
+
+// 回転の中心。中身の範囲（上端＝ミント園の枠 y=30、下端＝J・O の枠 y=373、左右は図面の 10〜990）の
+// 真ん中にして、回したあとも同じ範囲に収まるようにしている。
+const ROTATE_CX = 500
+const ROTATE_CY = 201.5
+
+// 回したあとの位置にある長方形（左上と幅・高さ）
+function placeRect(r: { x: number; y: number; w: number; h: number }) {
+  if (!ROTATE_FLOOR_MAP_180) return r
+  return { x: 2 * ROTATE_CX - (r.x + r.w), y: 2 * ROTATE_CY - (r.y + r.h), w: r.w, h: r.h }
+}
+
 // ─── エリア名ラベル ─────────────────────────────────────────────────────────────
 // スマホ幅（表示幅約302px）で約8.5px。太字・濃い色・白フチで背景の図面の上でも読めるようにする。
 const LABEL_FONT_SIZE = 28
@@ -48,6 +66,8 @@ const LABEL_TOP_BASELINE = LABEL_INSET + 20
 
 // 枠の左下に置くエリア（ほかは左上）。2026年10月の実データの枠で計算すると、
 // 左上のままでは Q が R と、G が H とラベルが重なったため。
+// 地図を180度回したときは、この置き方を回した先（ほかは右下、G・Q は右上）に置く。
+// 枠どうしの位置関係ごと回るので、元の向きで調整した重なりの避け方がそのまま効く。
 const LABEL_AT_BOTTOM: ReadonlySet<Zone> = new Set<Zone>(["G", "Q"])
 
 // ─── 種別カラー ─────────────────────────────────────────────────────────────────
@@ -394,8 +414,11 @@ export default function HerbGardenFloorMap() {
             </pattern>
           </defs>
 
-          {/* グリッド背景 */}
+          {/* グリッド背景（向きに関係ない模様なので回さない） */}
           <rect width="1000" height="480" fill="url(#floorgrid)" />
+
+          {/* ここから閉じタグまでが地図の図形。文字はこの外に正立で描く */}
+          <g transform={ROTATE_FLOOR_MAP_180 ? `rotate(180 ${ROTATE_CX} ${ROTATE_CY})` : undefined}>
 
           {/* ミント園（別枠）枠線 */}
           <rect
@@ -407,16 +430,6 @@ export default function HerbGardenFloorMap() {
             strokeDasharray="4,3"
             className="pointer-events-none"
           />
-          <text
-            x={761} y={44}
-            textAnchor="middle"
-            fontSize={9}
-            fill="#5f5e5a"
-            fillOpacity={0.6}
-            className="pointer-events-none select-none"
-          >
-            ミント園（別枠）
-          </text>
 
           {/* 平面図背景画像 */}
           <image
@@ -507,18 +520,39 @@ export default function HerbGardenFloorMap() {
             )
           })}
 
-          {/* ゾーンラベル（マーカーに隠れないよう最後に描く） */}
+          </g>
+
+          {/* ミント園のラベル。回したあとの枠の上端の中央に置く */}
+          {(() => {
+            const m = placeRect({ x: 620, y: 30, w: 282, h: 118 })
+            return (
+              <text
+                x={m.x + m.w / 2} y={m.y + 14}
+                textAnchor="middle"
+                fontSize={9}
+                fill="#5f5e5a"
+                fillOpacity={0.6}
+                className="pointer-events-none select-none"
+              >
+                ミント園（別枠）
+              </text>
+            )
+          })()}
+
+          {/* ゾーンラベル（マーカーに隠れないよう最後に描く）。回したあとの枠を基準に置く */}
           {ZONES.map((zone) => {
-            const f = zoneFrame(zone)
-            const y = LABEL_AT_BOTTOM.has(zone)
+            const f = placeRect(zoneFrame(zone))
+            // 回すと上下・左右が入れ替わる
+            const atBottom = LABEL_AT_BOTTOM.has(zone) !== ROTATE_FLOOR_MAP_180
+            const y = atBottom
               ? f.y + f.h - LABEL_INSET
               : f.y + LABEL_TOP_BASELINE
             return (
               <text
                 key={zone}
-                x={f.x + LABEL_INSET}
+                x={ROTATE_FLOOR_MAP_180 ? f.x + f.w - LABEL_INSET : f.x + LABEL_INSET}
                 y={y}
-                textAnchor="start"
+                textAnchor={ROTATE_FLOOR_MAP_180 ? "end" : "start"}
                 fontSize={LABEL_FONT_SIZE}
                 fontWeight={700}
                 fill="#0F6E56"

@@ -14,6 +14,11 @@ type PlantPos = { name: string; x: number; y: number }
 
 // ─── 配置マップの描画設定 ───────────────────────────────────────────────────────
 
+// 園内で立つ向き（駐車場側が下）に合わせて、点の配置を180度回して描く。
+// plant_positions の値は元の向きのまま。名札と番号は回さず、回した先の位置に正立で置く。
+// 元の向きに戻すときは false にする。全体マップは herb-garden-floor-map.tsx で別に切り替える。
+const ROTATE_AREA_MAP_180 = true
+
 // 描画領域（viewBox）の大きさ
 const MAP_W = 320
 const MAP_H = 200
@@ -235,9 +240,12 @@ export default function AreaDetailPage({
             const frameH = Math.max(rangeY * scale, MIN_EXTENT_H) + FRAME_PAD * 2
             const centerX = (minX + maxX) / 2
             const centerY = (minY + maxY) / 2
+            // 中心からのずれの向きを反転すると、点の並びが中心のまわりに180度回る。
+            // 外枠は中心に置いているので、回したあとも同じ位置で点を囲む。
+            const dir = ROTATE_AREA_MAP_180 ? -1 : 1
             const toSvg = (ex: number, ey: number) => ({
-              x: MAP_W / 2 + (ex - centerX) * scale,
-              y: MAP_H / 2 + (ey * Y_SCALE - centerY) * scale,
+              x: MAP_W / 2 + dir * (ex - centerX) * scale,
+              y: MAP_H / 2 + dir * (ey * Y_SCALE - centerY) * scale,
             })
             return (
               <div className="px-4 pt-4">
