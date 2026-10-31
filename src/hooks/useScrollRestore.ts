@@ -10,21 +10,41 @@ import { useEffect, useRef } from "react"
 // タブなどから新しく開いたときは控えを消し、今までどおり先頭から見せる。
 //
 // 画面内の「戻る」ボタンは router.back() なので、ブラウザの「戻る」と同じく popstate で判定できる。
+//
+// 位置は、リンクを押した瞬間に控え、それ以降は上書きしない。スクロールのたびに控えるだけだと、
+// 次の画面へ移る途中で Next.js がスクロールを動かした位置で上書きされてしまう。
 
 const STORAGE_PREFIX = "scroll-restore:"
-// popstate からこの時間内に一覧が開いたら「戻る」で来たとみなす
-const POP_WINDOW_MS = 2000
 
-let lastPopAt = 0
+// 最後の画面の移り方が「戻る・進む」（popstate）だったか。リンクを押したら取り消す。
+// 時間で判定すると、戻ってすぐタブを押したときも「戻る」とみなしてしまう
+let lastNavWasPop = false
+// リンクを押してから画面が切り替わるまでは、控えを上書きしない
+let leaving = false
+const leaveListeners = new Set<() => void>()
 let firstLoadChecked = false
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
-    lastPopAt = Date.now()
+    lastNavWasPop = true
+    leaving = true
   })
+  document.addEventListener(
+    "click",
+    (e) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]")
+      if (!a) return
+      lastNavWasPop = false
+      // 押した瞬間の位置を、開いている一覧ぶん控える
+      leaveListeners.forEach((fn) => fn())
+      leaving = true
+    },
+    true
+  )
 }
 
 function cameBack(): boolean {
-  const byPop = Date.now() - lastPopAt < POP_WINDOW_MS
+  const byPop = lastNavWasPop
+  lastNavWasPop = false
   // 植物ページを直接開いてから戻ったときなど、一覧のページを読み込み直した場合
   if (!firstLoadChecked) {
     firstLoadChecked = true
@@ -90,6 +110,7 @@ export function useScrollRestore<T = undefined>(
 
   // 画面を開いたとき：「戻る」で来たなら控えを読む。そうでなければ控えを消す
   useEffect(() => {
+    leaving = false
     if (cameBack()) {
       const saved = read<T>(key)
       if (saved) {
@@ -102,27 +123,32 @@ export function useScrollRestore<T = undefined>(
     if (scrollTopOnFresh) window.scrollTo(0, 0)
   }, [key, scrollTopOnFresh])
 
-  // スクロールのたびに位置を控える
+  // スクロールのたびと、リンクを押した瞬間に位置を控える（画面を離れる途中は上書きしない）
   useEffect(() => {
     let frame = 0
+    const save = () => {
+      if (pendingY.current !== null || leaving) return
+      write(key, { y: window.scrollY, extra: extraRef.current })
+    }
     const onScroll = () => {
       if (frame) return
       frame = requestAnimationFrame(() => {
         frame = 0
-        if (pendingY.current !== null) return
-        write(key, { y: window.scrollY, extra: extraRef.current })
+        save()
       })
     }
     window.addEventListener("scroll", onScroll, { passive: true })
+    leaveListeners.add(save)
     return () => {
       window.removeEventListener("scroll", onScroll)
+      leaveListeners.delete(save)
       if (frame) cancelAnimationFrame(frame)
     }
   }, [key])
 
   // 絞り込みなどが変わったら、位置と一緒に控え直す
   useEffect(() => {
-    if (pendingY.current !== null) return
+    if (pendingY.current !== null || leaving) return
     write(key, { y: window.scrollY, extra })
   }, [key, extra])
 
