@@ -28,6 +28,11 @@ const SAVE_NETWORK_ERROR = "保存に失敗しました。電波の状態をご�
 // サーバーがエラーを返したときは電波の問題ではないので、案内を分ける。
 const SAVE_SERVER_ERROR = "保存に失敗しました。時間を置いて、もう一度お試しください。"
 
+// 日本時間の今日（YYYY-MM-DD）。sv-SE の書式が YYYY-MM-DD になる
+function todayInJapan(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date())
+}
+
 export default function NewNotePage() {
   return (
     <Suspense
@@ -60,9 +65,8 @@ function NewNoteContent() {
   const [plantSearch, setPlantSearch] = useState("")
   const [showPlantDropdown, setShowPlantDropdown] = useState(false)
   const [noteText, setNoteText] = useState("")
-  const [visitDate, setVisitDate] = useState(
-    new Date().toISOString().split("T")[0]
-  )
+  // 初期値は日本時間の今日。toISOString() は UTC の日付なので、朝9時より前だと前日になっていた
+  const [visitDate, setVisitDate] = useState(todayInJapan)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [existingPhotoPath, setExistingPhotoPath] = useState<string | null>(
