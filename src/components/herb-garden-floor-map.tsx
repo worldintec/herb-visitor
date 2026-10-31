@@ -82,7 +82,11 @@ const INSET_MAX_H = 150 // 中身の高さの上限（図面の下にはみ出�
 const INSET_PAD = 8
 const INSET_HEADER = 26 // 見出し「T ミント園（拡大図）」の行
 const INSET_COLOR = "#4f6f63"
-const MARKER_R = 10 // S の近くに置く「T」の印の半径
+// S の近くに置く「T」の印の半径と、引き出し線の太さ。幅390px の画面（約0.26倍）で
+// 印が直径10px ほど、線が1px ほどになるようにしている（それより小さいとつぶれて見えない）
+const MARKER_R = 20
+const LEADER_WIDTH = 4
+const MARKER_GAP = MARKER_R + 2 // S の枠の角から印の中心まで（縦横それぞれ）
 
 type Rect = { x: number; y: number; w: number; h: number }
 type Point = { x: number; y: number }
@@ -570,33 +574,28 @@ export default function HerbGardenFloorMap() {
   )
   const insetRot: Rect = { x: INSET_X, y: insetTop, w: insetW, h: insetH }
 
-  // S の近くの「T」の印と引き出し線：S の枠のまわりの候補から、印と線がほかの枠・点・
-  // エリア名に当たる数がいちばん少ないものを選ぶ（同じなら線が短いほう）
+  // S の近くの「T」の印：ミント園の実際の位置（回したあとの地図で S の左下、S と U のあいだ）に
+  // 固定する。S の枠の左下の角のすぐ外に置く。
+  // 図面の画像で細かいマス目が描かれているのは左端（W の先）の1か所だけで、S の近くには
+  // 見当たらないため、画像からは読み取らずに S の枠を基準にしている。
   const sFrame = rotFrames.get("S")!
-  const markerCandidates: Point[] = []
-  const off = MARKER_R + 4
-  for (let k = 0; k <= 4; k++) {
-    const fx = sFrame.x + (sFrame.w * k) / 4
-    const fy = sFrame.y + (sFrame.h * k) / 4
-    markerCandidates.push({ x: fx, y: sFrame.y + sFrame.h + off }) // 下
-    markerCandidates.push({ x: fx, y: sFrame.y - off }) // 上
-    markerCandidates.push({ x: sFrame.x - off, y: fy }) // 左
-    markerCandidates.push({ x: sFrame.x + sFrame.w + off, y: fy }) // 右
+  const markerRot: Point = {
+    x: sFrame.x - MARKER_GAP,
+    y: sFrame.y + sFrame.h + MARKER_GAP,
   }
-  const attachFor = (m: Point): Point => ({
-    x: Math.min(Math.max(m.x, insetRot.x + 16), insetRot.x + insetRot.w - 16),
-    y: insetRot.y,
-  })
-  const scored = markerCandidates.map((m) => {
-    const box = { x: m.x - MARKER_R, y: m.y - MARKER_R, w: MARKER_R * 2, h: MARKER_R * 2 }
-    const a = attachFor(m)
-    const markerHits = obstacles.filter((o) => rectsHit(box, o)).length
-    // 線は S 自身の枠を出ていくぶんは数えない
-    const lineHits = obstacles.filter((o) => o !== sFrame && segmentHitsRect(m, a, o)).length
-    const crossesWalkway = Math.min(m.y, a.y) < WALKWAY_Y ? 1 : 0
-    return { m, a, cost: markerHits * 100 + crossesWalkway * 100 + lineHits * 10 + Math.hypot(a.x - m.x, a.y - m.y) / 1000 }
-  })
-  const best = scored.reduce((x, y) => (y.cost < x.cost ? y : x))
+  // 引き出し線：印から引き出し図の上辺へ。上辺のどこにつなぐかは、線がほかの枠・点・
+  // エリア名に当たる数がいちばん少ないところ（同じなら線が短いほう）にする
+  const attachCandidates: Point[] = []
+  for (let x = insetRot.x + 16; x <= insetRot.x + insetRot.w - 16; x += 8) {
+    attachCandidates.push({ x, y: insetRot.y })
+  }
+  const best = attachCandidates
+    .map((a) => {
+      // 線は S 自身の枠のそばから出るので、S の枠は数えない
+      const hits = obstacles.filter((o) => o !== sFrame && segmentHitsRect(markerRot, a, o)).length
+      return { a, cost: hits * 10 + Math.hypot(a.x - markerRot.x, a.y - markerRot.y) / 1000 }
+    })
+    .reduce((x, y) => (y.cost < x.cost ? y : x))
 
   // 描画領域の高さ。回転を切ったときは点対称の位置に移るので、その範囲も入れる
   const rotatedHeight = Math.max(IMAGE_TOP + FLOOR_IMAGE.h, insetRot.y + insetRot.h) + 12
@@ -611,7 +610,7 @@ export default function HerbGardenFloorMap() {
     w: tFrameRot.w * insetScale,
     h: tFrameRot.h * insetScale,
   }
-  const marker = toShown(best.m)
+  const marker = toShown(markerRot)
   const attach = toShown(best.a)
   // 引き出し図の中身：T の枠（元の向き）を、回して（または回さずに）縮めて枠の中へ
   const tFrame = zoneFrame("T")
@@ -734,16 +733,17 @@ export default function HerbGardenFloorMap() {
           <line
             x1={marker.x} y1={marker.y} x2={attach.x} y2={attach.y}
             stroke={INSET_COLOR}
-            strokeWidth={1.2}
+            strokeWidth={LEADER_WIDTH}
+            strokeLinecap="round"
             className="pointer-events-none"
           />
           <g className="pointer-events-none select-none">
-            <circle cx={marker.x} cy={marker.y} r={MARKER_R} fill="#ffffff" stroke={INSET_COLOR} strokeWidth={1.4} />
+            <circle cx={marker.x} cy={marker.y} r={MARKER_R} fill="#ffffff" stroke={INSET_COLOR} strokeWidth={3} />
             <text
               x={marker.x} y={marker.y}
               textAnchor="middle"
               dominantBaseline="central"
-              fontSize={13}
+              fontSize={24}
               fontWeight={700}
               fill={INSET_COLOR}
             >
