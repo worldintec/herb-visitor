@@ -46,15 +46,82 @@ const ZONES_BY_SIZE = [...ZONES].sort(
 // 元の向きに戻すときは false にする。エリア詳細の配置マップは areas/[id]/page.tsx で別に切り替える。
 const ROTATE_FLOOR_MAP_180 = true
 
-// 回転の中心。中身の範囲（上端＝ミント園の枠 y=30、下端＝J・O の枠 y=373、左右は図面の 10〜990）の
-// 真ん中にして、回したあとも同じ範囲に収まるようにしている。
+// 回転の中心の x。図面（10〜990）の真ん中。y は描くたびに決める（下の floorLayout）。
 const ROTATE_CX = 500
-const ROTATE_CY = 201.5
+
+// ミント園（別枠）の枠。元の向きの座標
+const MINT_FRAME = { x: 620, y: 30, w: 282, h: 118 }
+
+// 平面図の画像の位置。元の向きの座標
+const FLOOR_IMAGE = { x: 10, y: 145, w: 980, h: 224 }
+
+// ─── 位置の手がかり（歩道・用水路・神社・トイレ・駐車場・方角） ─────────────────
+// 園の輪郭の外の余白に、エリア名より小さく薄く描く。主役はエリア。
+// 位置は「回したあとの地図」で決めてあり、回転を切ると点対称の位置に移る。
+//
+// 回したときの並び（上から）:
+//   上の帯 … 左にミント園（T エリアごと移す）、中央に「歩道」、右に方位記号
+//   歩道の線
+//   園の図面（元の図面を180度回したもの）
+// 左右の余白に縦書きで、左は用水路・神社、右（やや下）はトイレ・駐車場。
+const SIDE_TEXT_GAP = 18 // いちばん外のエリアの枠と、左右の縦書きの中心のあいだ
+const SIDE_EDGE = 16 // 左右の縦書きの中心と、描画領域の端のあいだ
+const GUIDE_FONT_SIZE = 20 // エリア名（28・太字）より小さく
+const GUIDE_COLOR = "#8a8a82" // エリア名（#0F6E56）より薄く
+const BAND_INSET = 10 // 上の帯の、外周からの余白
+const WALKWAY_GAP = 12 // ミント園の下端と歩道の線のあいだ
+const IMAGE_GAP = 24 // 歩道の線と図面の上端のあいだ（枠の上端に置く G・Q のエリア名とも離す）
+const MIN_WALKWAY_Y = 74 // 方位記号（上の「東」まで）が収まる高さ
+
+type Rect = { x: number; y: number; w: number; h: number }
+
+function unionRect(a: Rect, b: Rect): Rect {
+  const x = Math.min(a.x, b.x)
+  const y = Math.min(a.y, b.y)
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }
+}
+
+/**
+ * 地図の配置。T エリアの枠とほかのエリアの枠（どちらも点の範囲で変わる。元の向きの座標）を
+ * 受け取り、回転の中心 y・ミント園を移す量・歩道の線の高さ・左右の縦書きの位置・viewBox を決める。
+ *
+ * 回したときは、ミント園と T の枠を合わせた範囲を左上に移し、その下に歩道の線、
+ * さらにその下に図面が来るよう、回転の中心 y をずらす。
+ * 左右の縦書きは、図面といちばん外のエリアの枠のさらに外に置く（枠や点と重ねない）。
+ */
+function floorLayout(tFrame: Rect, mainFrames: Rect[]) {
+  const group = unionRect(MINT_FRAME, tFrame)
+  const walkwayY = Math.max(BAND_INSET + group.h + WALKWAY_GAP, MIN_WALKWAY_Y)
+  const imageTop = walkwayY + IMAGE_GAP
+  // 図面の下端（元の y=369）が、回したあとに imageTop に来る中心
+  const cy = (imageTop + FLOOR_IMAGE.y + FLOOR_IMAGE.h) / 2
+  // ミント園＋T を回した先から、左上（図面の左端・帯の上端）へ移す量
+  const rotatedGroupX = 2 * ROTATE_CX - (group.x + group.w)
+  const rotatedGroupY = 2 * cy - (group.y + group.h)
+  const mintShift = ROTATE_FLOOR_MAP_180
+    ? { dx: FLOOR_IMAGE.x - rotatedGroupX, dy: BAND_INSET - rotatedGroupY }
+    : { dx: 0, dy: 0 }
+  // 回さないときは元の高さ。手がかりは点対称の位置（図面の下・左右）に収まる
+  const height = ROTATE_FLOOR_MAP_180 ? imageTop + FLOOR_IMAGE.h + 12 : 480
+  // 左右の縦書きの中心（回したあとの地図での x）。元の向きの右端が、回すと左端になる
+  const origLeft = Math.min(FLOOR_IMAGE.x, ...mainFrames.map((f) => f.x))
+  const origRight = Math.max(FLOOR_IMAGE.x + FLOOR_IMAGE.w, ...mainFrames.map((f) => f.x + f.w))
+  const leftTextX = 2 * ROTATE_CX - origRight - SIDE_TEXT_GAP
+  const rightTextX = 2 * ROTATE_CX - origLeft + SIDE_TEXT_GAP
+  // viewBox の左右の余白。回転を切ると左右が入れ替わるので、広いほうにそろえる
+  const sideMargin = Math.max(-(leftTextX - SIDE_EDGE), rightTextX + SIDE_EDGE - 1000)
+  return { cy, walkwayY, imageTop, mintShift, height, leftTextX, rightTextX, sideMargin }
+}
 
 // 回したあとの位置にある長方形（左上と幅・高さ）
-function placeRect(r: { x: number; y: number; w: number; h: number }) {
+function placeRect(r: Rect, cy: number): Rect {
   if (!ROTATE_FLOOR_MAP_180) return r
-  return { x: 2 * ROTATE_CX - (r.x + r.w), y: 2 * ROTATE_CY - (r.y + r.h), w: r.w, h: r.h }
+  return { x: 2 * ROTATE_CX - (r.x + r.w), y: 2 * cy - (r.y + r.h), w: r.w, h: r.h }
+}
+
+// 「回したあとの地図」で決めた点を、回転を切ったときは点対称の位置に移す
+function placePoint(x: number, y: number, cy: number): { x: number; y: number } {
+  return ROTATE_FLOOR_MAP_180 ? { x, y } : { x: 2 * ROTATE_CX - x, y: 2 * cy - y }
 }
 
 // ─── エリア名ラベル ─────────────────────────────────────────────────────────────
@@ -217,6 +284,83 @@ export default function HerbGardenFloorMap() {
     return { x, y, w, h }
   }
 
+  // ゾーン枠（ハイライト背景とクリック受付）。座標は元の向き
+  function renderZone(zone: Zone) {
+    const { x: ax, y: ay, w: aw, h: ah } = zoneFrame(zone)
+    const isHovered = hoveredZone === zone
+    return (
+      <g key={zone}>
+        {/* ハイライト背景 */}
+        <rect
+          x={ax} y={ay} width={aw} height={ah}
+          rx={3}
+          fill="#1D9E75"
+          fillOpacity={isHovered ? 0.18 : 0}
+          className="pointer-events-none transition-colors duration-150"
+        />
+        {/* ゾーン枠（クリック受付） */}
+        <rect
+          x={ax} y={ay} width={aw} height={ah}
+          rx={3}
+          fill="transparent"
+          stroke="#1D9E75"
+          strokeWidth={isHovered ? 1.5 : 0.8}
+          strokeDasharray="4,3"
+          strokeOpacity={isHovered ? 1 : 0.5}
+          style={{ cursor: "pointer" }}
+          onMouseEnter={() => setHoveredZone(zone)}
+          onMouseLeave={() => setHoveredZone(null)}
+          onClick={() => {
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false
+              return
+            }
+            router.push(`/areas/${zone}`)
+          }}
+        />
+      </g>
+    )
+  }
+
+  // プロットマーカー。座標は元の向き
+  function renderPlot(plot: MapPlot) {
+    const color = TYPE_COLORS[plot.type] ?? "#888780"
+    const isHovered = hoveredPlot === plot.id
+    return (
+      <g
+        key={plot.id}
+        style={{ cursor: "pointer" }}
+        onMouseEnter={() => setHoveredPlot(plot.id)}
+        onMouseLeave={() => setHoveredPlot(null)}
+        onClick={() => {
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false
+            return
+          }
+          router.push(`/areas/${plot.zone}`)
+        }}
+      >
+        <title>{plot.name}（エリア {plot.zone}）</title>
+        {isHovered && (
+          <circle
+            cx={plot.x} cy={plot.y} r={14}
+            fill={color}
+            fillOpacity={0.18}
+            className="pointer-events-none"
+          />
+        )}
+        <circle
+          cx={plot.x} cy={plot.y}
+          r={isHovered ? 8 : 6}
+          fill={color}
+          stroke="white"
+          strokeWidth={1.5}
+          style={{ transition: "r 0.1s" }}
+        />
+      </g>
+    )
+  }
+
   // ── ズーム・パンのジェスチャー処理 ──────────────────────────────────────────
   function localPoint(e: { clientX: number; clientY: number }): { x: number; y: number } {
     const rect = mapContainerRef.current!.getBoundingClientRect()
@@ -368,6 +512,28 @@ export default function HerbGardenFloorMap() {
     )
   }
 
+  const layout = floorLayout(
+    zoneFrame("T"),
+    ZONES.filter((zone) => zone !== "T").map(zoneFrame),
+  )
+
+  // ミント園と T エリアの位置を、回した先から左上へ移す
+  const shiftMint = (r: Rect): Rect => ({
+    ...r,
+    x: r.x + layout.mintShift.dx,
+    y: r.y + layout.mintShift.dy,
+  })
+
+  // 位置の手がかりの文字。中心の座標を「回したあとの地図」で決める
+  const imageMidY = layout.imageTop + FLOOR_IMAGE.h / 2
+  const guideLabels = [
+    { text: "歩道", ...placePoint(ROTATE_CX, layout.walkwayY - 14, layout.cy), vertical: false },
+    { text: "用水路", ...placePoint(layout.leftTextX, imageMidY - 52, layout.cy), vertical: true },
+    { text: "神社", ...placePoint(layout.leftTextX, imageMidY + 34, layout.cy), vertical: true },
+    { text: "トイレ", ...placePoint(layout.rightTextX, imageMidY + 10, layout.cy), vertical: true },
+    { text: "駐車場", ...placePoint(layout.rightTextX, imageMidY + 82, layout.cy), vertical: true },
+  ]
+
   return (
     <div className="space-y-2">
       {/* マップSVG（アプリ内ズーム・パン対応） */}
@@ -391,7 +557,7 @@ export default function HerbGardenFloorMap() {
           </button>
         )}
         <svg
-          viewBox="0 0 1000 480"
+          viewBox={`${-layout.sideMargin} 0 ${1000 + layout.sideMargin * 2} ${layout.height}`}
           className="w-full h-auto block"
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
@@ -415,116 +581,54 @@ export default function HerbGardenFloorMap() {
           </defs>
 
           {/* グリッド背景（向きに関係ない模様なので回さない） */}
-          <rect width="1000" height="480" fill="url(#floorgrid)" />
+          <rect x={-layout.sideMargin} width={1000 + layout.sideMargin * 2} height={layout.height} fill="url(#floorgrid)" />
 
-          {/* ここから閉じタグまでが地図の図形。文字はこの外に正立で描く */}
-          <g transform={ROTATE_FLOOR_MAP_180 ? `rotate(180 ${ROTATE_CX} ${ROTATE_CY})` : undefined}>
+          {/* ここから閉じタグまでが地図の図形（T エリアとミント園を除く）。文字はこの外に正立で描く */}
+          <g transform={ROTATE_FLOOR_MAP_180 ? `rotate(180 ${ROTATE_CX} ${layout.cy})` : undefined}>
+            {/* 平面図背景画像 */}
+            <image
+              href="/ハーブ園図面加工後.png"
+              x={FLOOR_IMAGE.x}
+              y={FLOOR_IMAGE.y}
+              width={FLOOR_IMAGE.w}
+              height={FLOOR_IMAGE.h}
+              preserveAspectRatio="none"
+              opacity={0.9}
+              className="pointer-events-none"
+            />
 
-          {/* ミント園（別枠）枠線 */}
-          <rect
-            x={620} y={30} width={282} height={118}
-            rx={4}
-            fill="rgba(29,158,117,0.04)"
-            stroke="rgba(29,158,117,0.3)"
-            strokeWidth={0.8}
-            strokeDasharray="4,3"
-            className="pointer-events-none"
-          />
+            {/* ゾーン（面積降順で描画） */}
+            {ZONES_BY_SIZE.filter((zone) => zone !== "T").map(renderZone)}
 
-          {/* 平面図背景画像 */}
-          <image
-            href="/ハーブ園図面加工後.png"
-            x={10}
-            y={145}
-            width={980}
-            height={224}
-            preserveAspectRatio="none"
-            opacity={0.9}
-            className="pointer-events-none"
-          />
-
-          {/* ゾーン（面積降順で描画） */}
-          {ZONES_BY_SIZE.map((zone) => {
-            const { x: ax, y: ay, w: aw, h: ah } = zoneFrame(zone)
-            const isHovered = hoveredZone === zone
-            return (
-              <g key={zone}>
-                {/* ハイライト背景 */}
-                <rect
-                  x={ax} y={ay} width={aw} height={ah}
-                  rx={3}
-                  fill="#1D9E75"
-                  fillOpacity={isHovered ? 0.18 : 0}
-                  className="pointer-events-none transition-colors duration-150"
-                />
-                {/* ゾーン枠（クリック受付） */}
-                <rect
-                  x={ax} y={ay} width={aw} height={ah}
-                  rx={3}
-                  fill="transparent"
-                  stroke="#1D9E75"
-                  strokeWidth={isHovered ? 1.5 : 0.8}
-                  strokeDasharray="4,3"
-                  strokeOpacity={isHovered ? 1 : 0.5}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={() => setHoveredZone(zone)}
-                  onMouseLeave={() => setHoveredZone(null)}
-                  onClick={() => {
-                    if (suppressClickRef.current) {
-                      suppressClickRef.current = false
-                      return
-                    }
-                    router.push(`/areas/${zone}`)
-                  }}
-                />
-              </g>
-            )
-          })}
-
-          {/* プロットマーカー */}
-          {plots.map((plot) => {
-            const color = TYPE_COLORS[plot.type] ?? "#888780"
-            const isHovered = hoveredPlot === plot.id
-            return (
-              <g
-                key={plot.id}
-                style={{ cursor: "pointer" }}
-                onMouseEnter={() => setHoveredPlot(plot.id)}
-                onMouseLeave={() => setHoveredPlot(null)}
-                onClick={() => {
-                  if (suppressClickRef.current) {
-                    suppressClickRef.current = false
-                    return
-                  }
-                  router.push(`/areas/${plot.zone}`)
-                }}
-              >
-                <title>{plot.name}（エリア {plot.zone}）</title>
-                {isHovered && (
-                  <circle
-                    cx={plot.x} cy={plot.y} r={14}
-                    fill={color}
-                    fillOpacity={0.18}
-                    className="pointer-events-none"
-                  />
-                )}
-                <circle
-                  cx={plot.x} cy={plot.y}
-                  r={isHovered ? 8 : 6}
-                  fill={color}
-                  stroke="white"
-                  strokeWidth={1.5}
-                  style={{ transition: "r 0.1s" }}
-                />
-              </g>
-            )
-          })}
-
+            {/* プロットマーカー */}
+            {plots.filter((plot) => plot.zone !== "T").map(renderPlot)}
           </g>
 
-          {/* ミント園のラベル。回したあとの枠の上端の中央に置く */}
+          {/* ミント園と T エリア。回したときは、回した先から左上へ移す */}
+          <g
+            transform={
+              ROTATE_FLOOR_MAP_180
+                ? `translate(${layout.mintShift.dx} ${layout.mintShift.dy}) rotate(180 ${ROTATE_CX} ${layout.cy})`
+                : undefined
+            }
+          >
+            {/* ミント園（別枠）枠線 */}
+            <rect
+              x={MINT_FRAME.x} y={MINT_FRAME.y} width={MINT_FRAME.w} height={MINT_FRAME.h}
+              rx={4}
+              fill="rgba(29,158,117,0.04)"
+              stroke="rgba(29,158,117,0.3)"
+              strokeWidth={0.8}
+              strokeDasharray="4,3"
+              className="pointer-events-none"
+            />
+            {renderZone("T")}
+            {plots.filter((plot) => plot.zone === "T").map(renderPlot)}
+          </g>
+
+          {/* ミント園のラベル。枠の上端の中央に置く */}
           {(() => {
-            const m = placeRect({ x: 620, y: 30, w: 282, h: 118 })
+            const m = shiftMint(placeRect(MINT_FRAME, layout.cy))
             return (
               <text
                 x={m.x + m.w / 2} y={m.y + 14}
@@ -539,9 +643,48 @@ export default function HerbGardenFloorMap() {
             )
           })()}
 
+          {/* 位置の手がかり（園の輪郭の外の余白。文字は正立） */}
+          <g className="pointer-events-none select-none">
+            {/* 歩道：図面の上端に沿った細い線 */}
+            {(() => {
+              const a = placePoint(FLOOR_IMAGE.x, layout.walkwayY, layout.cy)
+              const b = placePoint(FLOOR_IMAGE.x + FLOOR_IMAGE.w, layout.walkwayY, layout.cy)
+              return (
+                <line
+                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                  stroke={GUIDE_COLOR}
+                  strokeOpacity={0.6}
+                  strokeWidth={1.2}
+                  strokeDasharray="10,6"
+                />
+              )
+            })()}
+            {guideLabels.map((g) => (
+              <GuideText key={g.text} text={g.text} x={g.x} y={g.y} vertical={g.vertical} />
+            ))}
+            {/* 方位記号。回したときは 左＝北・上＝東・右＝南・下＝西 */}
+            {(() => {
+              const c = placePoint(1000 - 50, layout.walkwayY - 36, layout.cy)
+              const k = ROTATE_FLOOR_MAP_180 ? 1 : -1
+              const ARM = 12
+              const AT = 25
+              return (
+                <g>
+                  <line x1={c.x - ARM} y1={c.y} x2={c.x + ARM} y2={c.y} stroke={GUIDE_COLOR} strokeWidth={1.2} />
+                  <line x1={c.x} y1={c.y - ARM} x2={c.x} y2={c.y + ARM} stroke={GUIDE_COLOR} strokeWidth={1.2} />
+                  <GuideText text="北" x={c.x - AT * k} y={c.y} size={16} />
+                  <GuideText text="東" x={c.x} y={c.y - AT * k} size={16} />
+                  <GuideText text="南" x={c.x + AT * k} y={c.y} size={16} />
+                  <GuideText text="西" x={c.x} y={c.y + AT * k} size={16} />
+                </g>
+              )
+            })()}
+          </g>
+
           {/* ゾーンラベル（マーカーに隠れないよう最後に描く）。回したあとの枠を基準に置く */}
           {ZONES.map((zone) => {
-            const f = placeRect(zoneFrame(zone))
+            const placed = placeRect(zoneFrame(zone), layout.cy)
+            const f = zone === "T" ? shiftMint(placed) : placed
             // 回すと上下・左右が入れ替わる
             const atBottom = LABEL_AT_BOTTOM.has(zone) !== ROTATE_FLOOR_MAP_180
             const y = atBottom
@@ -592,5 +735,44 @@ export default function HerbGardenFloorMap() {
 
 
     </div>
+  )
+}
+
+// 位置の手がかりの文字。(x, y) は文字の中心。縦書きは1文字ずつ上から並べる
+function GuideText({
+  text,
+  x,
+  y,
+  vertical = false,
+  size = GUIDE_FONT_SIZE,
+}: {
+  text: string
+  x: number
+  y: number
+  vertical?: boolean
+  size?: number
+}) {
+  const chars = vertical ? Array.from(text) : [text]
+  const step = size * 1.05
+  const top = y - (step * (chars.length - 1)) / 2
+  return (
+    <>
+      {chars.map((c, i) => (
+        <text
+          key={i}
+          x={x}
+          y={top + step * i}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={size}
+          fill={GUIDE_COLOR}
+          stroke="#ffffff"
+          strokeWidth={3}
+          paintOrder="stroke"
+        >
+          {c}
+        </text>
+      ))}
+    </>
   )
 }
