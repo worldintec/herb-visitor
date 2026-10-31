@@ -35,7 +35,8 @@ export default function AddToHomeScreenPrompt() {
         return
       }
 
-      if (typeof Notification === "undefined" || Notification.permission !== "granted") return
+      // 通知の許可は条件にしない。iPhone の Safari には Notification が無く、
+      // 許可を条件にすると、いちばん案内したい「まだ追加していない iPhone の人」に出なかった。
 
       const detected = detectMobilePlatform()
       if (!detected) return

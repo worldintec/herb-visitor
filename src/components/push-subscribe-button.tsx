@@ -19,9 +19,10 @@ export default function PushSubscribeButton() {
         if (!cancelled) {
           // iOSはホーム画面に追加したPWA（standalone）でしかWeb Pushに対応していないため、
           // Safariで直接開いた場合はここに来る。汎用エラーではなく追加手順を案内する。
+          // 手順のモーダルはボタンを押したときだけ開く（開いただけで出すと、ホームを
+          // 開くたびに出てしまう）。自動の案内は add-to-home-screen-prompt が1回だけ出す。
           if (detectMobilePlatform() === 'ios' && !isStandalone()) {
             setStatus('unsupported-ios');
-            setShowAddToHomeScreenModal(true);
           } else {
             setStatus('error');
           }
@@ -115,9 +116,17 @@ export default function PushSubscribeButton() {
   if (status === 'unsupported-ios') {
     return (
       <>
-        <p className="text-sm text-herb-text-secondary text-center max-w-xs">
-          iPhoneで通知を受け取るには、まずホーム画面に追加してから開いてください。
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-sm text-herb-text-secondary text-center max-w-xs">
+            iPhoneで通知を受け取るには、まずホーム画面に追加してから開いてください。
+          </p>
+          <button
+            onClick={() => setShowAddToHomeScreenModal(true)}
+            className="text-sm px-4 py-2 rounded-lg bg-green-600 text-white"
+          >
+            ホーム画面への追加のしかた
+          </button>
+        </div>
         {showAddToHomeScreenModal && (
           <AddToHomeScreenModal
             platform="ios"
