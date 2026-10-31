@@ -18,6 +18,8 @@ const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
 function bloomMonthsFromText(text: string | null | undefined): Set<number> {
   const months = new Set<number>()
   if (!text) return months
+  // 「花は目立たない」「穂は目立たず」のように花が目立たないものは、見頃として出さない
+  if (/目立た(ない|ず)/.test(text)) return months
   // 「X月」の直接指定
   const monthMatches = text.matchAll(/(\d{1,2})月/g)
   for (const m of monthMatches) {
@@ -41,8 +43,14 @@ function bloomMonthsFromText(text: string | null | undefined): Set<number> {
     "冬": [12, 1, 2], "初冬": [12], "真冬": [1, 2],
     "通年": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   }
-  for (const [key, ms] of Object.entries(seasonMap)) {
-    if (text.includes(key)) for (const m of ms) months.add(m)
+  // 長い言葉から先に照合し、当たった部分は消してから次を見る。
+  // そのまま includes で見ると「初夏」が「夏」にも、「早春」が「春」にも当たってしまう
+  let rest = text
+  const keys = Object.keys(seasonMap).sort((a, b) => b.length - a.length)
+  for (const key of keys) {
+    if (!rest.includes(key)) continue
+    for (const m of seasonMap[key]) months.add(m)
+    rest = rest.split(key).join("　")
   }
   return months
 }
@@ -133,6 +141,8 @@ export default function HomePage() {
       const bHasPhoto = photos[b.name] ? 0 : 1
       return aHasPhoto - bHasPhoto
     })
+    // 同じ名前の植物（エリア違いの株）は、並べ替えでいちばん上に来た1件だけを残す
+    .filter((p, i, list) => list.findIndex((q) => q.name === p.name) === i)
     .slice(0, 8)
 
   const areaCounts = plants.reduce(
