@@ -42,86 +42,101 @@ const ZONES_BY_SIZE = [...ZONES].sort(
 // ─── 地図の向き ─────────────────────────────────────────────────────────────────
 // 園内で立つ向き（駐車場側が下、A エリアが右）に合わせて、図面・枠・点を180度回して描く。
 // 座標のデータ（map_plots・zone_offsets・ZONE_AREAS）は元の向きのまま。
-// 文字（エリア名・ミント園）は回さず、回した先の位置に正立で置く。
+// 文字（エリア名・手がかり）は回さず、回した先の位置に正立で置く。
 // 元の向きに戻すときは false にする。エリア詳細の配置マップは areas/[id]/page.tsx で別に切り替える。
 const ROTATE_FLOOR_MAP_180 = true
-
-// 回転の中心の x。図面（10〜990）の真ん中。y は描くたびに決める（下の floorLayout）。
-const ROTATE_CX = 500
-
-// ミント園（別枠）の枠。元の向きの座標
-const MINT_FRAME = { x: 620, y: 30, w: 282, h: 118 }
 
 // 平面図の画像の位置。元の向きの座標
 const FLOOR_IMAGE = { x: 10, y: 145, w: 980, h: 224 }
 
+// ─── 回したあとの地図の並び ─────────────────────────────────────────────────────
+// 上から: 上の帯（中央に「歩道」、右上に方位記号）→ 歩道の線 → 園の図面。
+// 図面の左下（輪郭の外の空き）に、T（ミント園）の引き出し図を置く。
+// 手がかりや引き出し図の位置は、すべて「回したあとの地図」の座標で決める。
+// 回転を切ったときは、決めた位置を点対称に移して描く（toShown）。
+const WALKWAY_Y = 74 // 歩道の線の高さ。上の帯に方位記号（上の「東」まで）が収まる
+const IMAGE_TOP = WALKWAY_Y + 24 // 図面の上端（枠の上端に置く G・Q のエリア名とも離す）
+const ROTATE_CX = 500 // 回転の中心。図面（10〜990）の真ん中
+const ROTATE_CY = (IMAGE_TOP + FLOOR_IMAGE.y + FLOOR_IMAGE.h) / 2 // 図面の下端（元の y=369）が IMAGE_TOP に来る
+
+// 回したあとの図面で、左下（x=10〜262）の輪郭がいちばん下まで来る位置（図面の上端から）。
+// 2026年11月に図面の画像（public/ハーブ園図面加工後.png）の線から測った値。
+// 引き出し図はこれより下に置き、園の輪郭にかぶせない。
+const OUTLINE_BOTTOM_LEFT = 132
+
 // ─── 位置の手がかり（歩道・用水路・神社・トイレ・駐車場・方角） ─────────────────
 // 園の輪郭の外の余白に、エリア名より小さく薄く描く。主役はエリア。
-// 位置は「回したあとの地図」で決めてあり、回転を切ると点対称の位置に移る。
-//
-// 回したときの並び（上から）:
-//   上の帯 … 左にミント園（T エリアごと移す）、中央に「歩道」、右に方位記号
-//   歩道の線
-//   園の図面（元の図面を180度回したもの）
-// 左右の余白に縦書きで、左は用水路・神社、右（やや下）はトイレ・駐車場。
-const SIDE_TEXT_GAP = 18 // いちばん外のエリアの枠と、左右の縦書きの中心のあいだ
-const SIDE_EDGE = 16 // 左右の縦書きの中心と、描画領域の端のあいだ
+// 用水路・神社とトイレ・駐車場は園に接していないので、矢印で「その方向の先」を示す。
 const GUIDE_FONT_SIZE = 20 // エリア名（28・太字）より小さく
 const GUIDE_COLOR = "#8a8a82" // エリア名（#0F6E56）より薄く
-const BAND_INSET = 10 // 上の帯の、外周からの余白
-const WALKWAY_GAP = 12 // ミント園の下端と歩道の線のあいだ
-const IMAGE_GAP = 24 // 歩道の線と図面の上端のあいだ（枠の上端に置く G・Q のエリア名とも離す）
-const MIN_WALKWAY_Y = 74 // 方位記号（上の「東」まで）が収まる高さ
+const SIDE_BLOCK_HALF = 16 // 左右の手がかり（縦書き＋短い矢印）の幅の半分。地図を小さくしすぎないよう細くする
+const SIDE_GAP = 10 // いちばん外のエリアの枠と、左右の手がかりのあいだ
+const SIDE_EDGE = 8 // 左右の手がかりと、描画領域の端のあいだ
+
+// ─── T（ミント園）の引き出し図 ─────────────────────────────────────────────────
+// ミント園は S の近くにあるが小さいので、拡大して別枠で出す。
+// S の近くに小さな「T」の印を置き、引き出し図と細い実線でつなぐ。
+const INSET_X = FLOOR_IMAGE.x + 4 // 引き出し図の左端
+const INSET_MAX_W = 248 // 中身（T の枠）の幅の上限。左下の空きに収める
+const INSET_MAX_H = 150 // 中身の高さの上限（図面の下にはみ出してよい）
+const INSET_PAD = 8
+const INSET_HEADER = 26 // 見出し「T ミント園（拡大図）」の行
+const INSET_COLOR = "#4f6f63"
+const MARKER_R = 10 // S の近くに置く「T」の印の半径
 
 type Rect = { x: number; y: number; w: number; h: number }
+type Point = { x: number; y: number }
 
-function unionRect(a: Rect, b: Rect): Rect {
-  const x = Math.min(a.x, b.x)
-  const y = Math.min(a.y, b.y)
-  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y }
+// 元の向きの座標を、回したあとの座標へ（180度回転は自分自身が逆変換）
+function rotPoint(p: Point): Point {
+  return { x: 2 * ROTATE_CX - p.x, y: 2 * ROTATE_CY - p.y }
+}
+function rotRect(r: Rect): Rect {
+  return { x: 2 * ROTATE_CX - (r.x + r.w), y: 2 * ROTATE_CY - (r.y + r.h), w: r.w, h: r.h }
+}
+// 「回したあとの地図」で決めた位置を、実際に描く位置へ。回転を切ったときは点対称に移す
+function toShown(p: Point): Point {
+  return ROTATE_FLOOR_MAP_180 ? p : rotPoint(p)
+}
+function toShownRect(r: Rect): Rect {
+  return ROTATE_FLOOR_MAP_180 ? r : rotRect(r)
 }
 
-/**
- * 地図の配置。T エリアの枠とほかのエリアの枠（どちらも点の範囲で変わる。元の向きの座標）を
- * 受け取り、回転の中心 y・ミント園を移す量・歩道の線の高さ・左右の縦書きの位置・viewBox を決める。
- *
- * 回したときは、ミント園と T の枠を合わせた範囲を左上に移し、その下に歩道の線、
- * さらにその下に図面が来るよう、回転の中心 y をずらす。
- * 左右の縦書きは、図面といちばん外のエリアの枠のさらに外に置く（枠や点と重ねない）。
- */
-function floorLayout(tFrame: Rect, mainFrames: Rect[]) {
-  const group = unionRect(MINT_FRAME, tFrame)
-  const walkwayY = Math.max(BAND_INSET + group.h + WALKWAY_GAP, MIN_WALKWAY_Y)
-  const imageTop = walkwayY + IMAGE_GAP
-  // 図面の下端（元の y=369）が、回したあとに imageTop に来る中心
-  const cy = (imageTop + FLOOR_IMAGE.y + FLOOR_IMAGE.h) / 2
-  // ミント園＋T を回した先から、左上（図面の左端・帯の上端）へ移す量
-  const rotatedGroupX = 2 * ROTATE_CX - (group.x + group.w)
-  const rotatedGroupY = 2 * cy - (group.y + group.h)
-  const mintShift = ROTATE_FLOOR_MAP_180
-    ? { dx: FLOOR_IMAGE.x - rotatedGroupX, dy: BAND_INSET - rotatedGroupY }
-    : { dx: 0, dy: 0 }
-  // 回さないときは元の高さ。手がかりは点対称の位置（図面の下・左右）に収まる
-  const height = ROTATE_FLOOR_MAP_180 ? imageTop + FLOOR_IMAGE.h + 12 : 480
-  // 左右の縦書きの中心（回したあとの地図での x）。元の向きの右端が、回すと左端になる
-  const origLeft = Math.min(FLOOR_IMAGE.x, ...mainFrames.map((f) => f.x))
-  const origRight = Math.max(FLOOR_IMAGE.x + FLOOR_IMAGE.w, ...mainFrames.map((f) => f.x + f.w))
-  const leftTextX = 2 * ROTATE_CX - origRight - SIDE_TEXT_GAP
-  const rightTextX = 2 * ROTATE_CX - origLeft + SIDE_TEXT_GAP
-  // viewBox の左右の余白。回転を切ると左右が入れ替わるので、広いほうにそろえる
-  const sideMargin = Math.max(-(leftTextX - SIDE_EDGE), rightTextX + SIDE_EDGE - 1000)
-  return { cy, walkwayY, imageTop, mintShift, height, leftTextX, rightTextX, sideMargin }
+function rectsHit(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 }
 
-// 回したあとの位置にある長方形（左上と幅・高さ）
-function placeRect(r: Rect, cy: number): Rect {
-  if (!ROTATE_FLOOR_MAP_180) return r
-  return { x: 2 * ROTATE_CX - (r.x + r.w), y: 2 * cy - (r.y + r.h), w: r.w, h: r.h }
+// 線分が長方形を横切るか（Liang–Barsky）
+function segmentHitsRect(p: Point, q: Point, r: Rect): boolean {
+  let t0 = 0
+  let t1 = 1
+  const dx = q.x - p.x
+  const dy = q.y - p.y
+  const checks: [number, number][] = [
+    [-dx, p.x - r.x],
+    [dx, r.x + r.w - p.x],
+    [-dy, p.y - r.y],
+    [dy, r.y + r.h - p.y],
+  ]
+  for (const [pp, qq] of checks) {
+    if (pp === 0) {
+      if (qq < 0) return false
+    } else {
+      const t = qq / pp
+      if (pp < 0) t0 = Math.max(t0, t)
+      else t1 = Math.min(t1, t)
+      if (t0 > t1) return false
+    }
+  }
+  return true
 }
 
-// 「回したあとの地図」で決めた点を、回転を切ったときは点対称の位置に移す
-function placePoint(x: number, y: number, cy: number): { x: number; y: number } {
-  return ROTATE_FLOOR_MAP_180 ? { x, y } : { x: 2 * ROTATE_CX - x, y: 2 * cy - y }
+// エリア名の文字の範囲（回したあとの地図での置き方。描画の規則と同じ）
+function rotatedLabelBox(zone: Zone, f: Rect): Rect {
+  const atBottom = !LABEL_AT_BOTTOM.has(zone)
+  const baseline = atBottom ? f.y + f.h - LABEL_INSET : f.y + LABEL_TOP_BASELINE
+  const right = f.x + f.w - LABEL_INSET + (ROTATED_LABEL_NUDGE_X[zone] ?? 0)
+  return { x: right - 22, y: baseline - 22, w: 22, h: 24 }
 }
 
 // ─── エリア名ラベル ─────────────────────────────────────────────────────────────
@@ -136,6 +151,10 @@ const LABEL_TOP_BASELINE = LABEL_INSET + 20
 // 地図を180度回したときは、この置き方を回した先（ほかは右下、G・Q は右上）に置く。
 // 枠どうしの位置関係ごと回るので、元の向きで調整した重なりの避け方がそのまま効く。
 const LABEL_AT_BOTTOM: ReadonlySet<Zone> = new Set<Zone>(["G", "Q"])
+
+// 回したときだけ、横にずらすエリア名（負は左）。C と D は文字のあいだが約1しかなく、
+// 地図の表示倍率によって文字幅の測れ方が変わると触れてしまうため、C を少し離す。
+const ROTATED_LABEL_NUDGE_X: Partial<Record<Zone, number>> = { C: -3 }
 
 // ─── 種別カラー ─────────────────────────────────────────────────────────────────
 
@@ -512,27 +531,102 @@ export default function HerbGardenFloorMap() {
     )
   }
 
-  const layout = floorLayout(
-    zoneFrame("T"),
-    ZONES.filter((zone) => zone !== "T").map(zoneFrame),
+  // ── 回したあとの地図での配置（手がかり・引き出し図）──────────────────────
+  // 当たり判定に使う、T 以外のエリアの枠・点・エリア名（回したあとの座標）
+  const mainZones = ZONES.filter((zone) => zone !== "T")
+  const rotFrames = new Map(mainZones.map((zone) => [zone, rotRect(zoneFrame(zone))] as const))
+  const obstacleFrames = [...rotFrames.values()]
+  const obstacleLabels = mainZones.map((zone) => rotatedLabelBox(zone, rotFrames.get(zone)!))
+  const obstacleDots = plots
+    .filter((plot) => plot.zone !== "T")
+    .map((plot) => {
+      const p = rotPoint({ x: plot.x, y: plot.y })
+      return { x: p.x - PLOT_RADIUS, y: p.y - PLOT_RADIUS, w: PLOT_RADIUS * 2, h: PLOT_RADIUS * 2 }
+    })
+  const obstacles = [...obstacleFrames, ...obstacleLabels, ...obstacleDots]
+
+  // 左右の手がかりは、図面といちばん外のエリアの枠のさらに外に置く
+  const leftMost = Math.min(FLOOR_IMAGE.x, ...obstacleFrames.map((f) => f.x))
+  const rightMost = Math.max(FLOOR_IMAGE.x + FLOOR_IMAGE.w, ...obstacleFrames.map((f) => f.x + f.w))
+  const leftBlockX = leftMost - SIDE_GAP - SIDE_BLOCK_HALF
+  const rightBlockX = rightMost + SIDE_GAP + SIDE_BLOCK_HALF
+  // 回転を切ると左右が入れ替わるので、広いほうにそろえる
+  const sideMargin = Math.max(
+    -(leftBlockX - SIDE_BLOCK_HALF - SIDE_EDGE),
+    rightBlockX + SIDE_BLOCK_HALF + SIDE_EDGE - 1000,
   )
+  const imageMidY = IMAGE_TOP + FLOOR_IMAGE.h / 2
 
-  // ミント園と T エリアの位置を、回した先から左上へ移す
-  const shiftMint = (r: Rect): Rect => ({
-    ...r,
-    x: r.x + layout.mintShift.dx,
-    y: r.y + layout.mintShift.dy,
+  // 引き出し図：T の枠を回して、左下の空きに収まる大きさに縮める
+  const tFrameRot = rotRect(zoneFrame("T"))
+  const insetScale = Math.min(1, INSET_MAX_W / tFrameRot.w, INSET_MAX_H / tFrameRot.h)
+  const insetW = tFrameRot.w * insetScale + INSET_PAD * 2
+  const insetH = INSET_HEADER + tFrameRot.h * insetScale + INSET_PAD
+  // 輪郭と、同じ横幅にある枠・点・エリア名より下に置く
+  const insetSpan = { x: INSET_X, y: 0, w: insetW, h: 10000 }
+  const insetTop = Math.max(
+    IMAGE_TOP + OUTLINE_BOTTOM_LEFT,
+    ...obstacles.filter((o) => rectsHit(o, insetSpan)).map((o) => o.y + o.h + 8),
+  )
+  const insetRot: Rect = { x: INSET_X, y: insetTop, w: insetW, h: insetH }
+
+  // S の近くの「T」の印と引き出し線：S の枠のまわりの候補から、印と線がほかの枠・点・
+  // エリア名に当たる数がいちばん少ないものを選ぶ（同じなら線が短いほう）
+  const sFrame = rotFrames.get("S")!
+  const markerCandidates: Point[] = []
+  const off = MARKER_R + 4
+  for (let k = 0; k <= 4; k++) {
+    const fx = sFrame.x + (sFrame.w * k) / 4
+    const fy = sFrame.y + (sFrame.h * k) / 4
+    markerCandidates.push({ x: fx, y: sFrame.y + sFrame.h + off }) // 下
+    markerCandidates.push({ x: fx, y: sFrame.y - off }) // 上
+    markerCandidates.push({ x: sFrame.x - off, y: fy }) // 左
+    markerCandidates.push({ x: sFrame.x + sFrame.w + off, y: fy }) // 右
+  }
+  const attachFor = (m: Point): Point => ({
+    x: Math.min(Math.max(m.x, insetRot.x + 16), insetRot.x + insetRot.w - 16),
+    y: insetRot.y,
   })
+  const scored = markerCandidates.map((m) => {
+    const box = { x: m.x - MARKER_R, y: m.y - MARKER_R, w: MARKER_R * 2, h: MARKER_R * 2 }
+    const a = attachFor(m)
+    const markerHits = obstacles.filter((o) => rectsHit(box, o)).length
+    // 線は S 自身の枠を出ていくぶんは数えない
+    const lineHits = obstacles.filter((o) => o !== sFrame && segmentHitsRect(m, a, o)).length
+    const crossesWalkway = Math.min(m.y, a.y) < WALKWAY_Y ? 1 : 0
+    return { m, a, cost: markerHits * 100 + crossesWalkway * 100 + lineHits * 10 + Math.hypot(a.x - m.x, a.y - m.y) / 1000 }
+  })
+  const best = scored.reduce((x, y) => (y.cost < x.cost ? y : x))
 
-  // 位置の手がかりの文字。中心の座標を「回したあとの地図」で決める
-  const imageMidY = layout.imageTop + FLOOR_IMAGE.h / 2
-  const guideLabels = [
-    { text: "歩道", ...placePoint(ROTATE_CX, layout.walkwayY - 14, layout.cy), vertical: false },
-    { text: "用水路", ...placePoint(layout.leftTextX, imageMidY - 52, layout.cy), vertical: true },
-    { text: "神社", ...placePoint(layout.leftTextX, imageMidY + 34, layout.cy), vertical: true },
-    { text: "トイレ", ...placePoint(layout.rightTextX, imageMidY + 10, layout.cy), vertical: true },
-    { text: "駐車場", ...placePoint(layout.rightTextX, imageMidY + 82, layout.cy), vertical: true },
-  ]
+  // 描画領域の高さ。回転を切ったときは点対称の位置に移るので、その範囲も入れる
+  const rotatedHeight = Math.max(IMAGE_TOP + FLOOR_IMAGE.h, insetRot.y + insetRot.h) + 12
+  const viewHeight = ROTATE_FLOOR_MAP_180 ? rotatedHeight : Math.max(480, 2 * ROTATE_CY)
+
+  // 実際に描く位置
+  const inset = toShownRect(insetRot)
+  // 中身は、枠がどこへ移っても見出しの下に置く（枠だけを点対称に移す）
+  const insetContent: Rect = {
+    x: inset.x + INSET_PAD,
+    y: inset.y + INSET_HEADER,
+    w: tFrameRot.w * insetScale,
+    h: tFrameRot.h * insetScale,
+  }
+  const marker = toShown(best.m)
+  const attach = toShown(best.a)
+  // 引き出し図の中身：T の枠（元の向き）を、回して（または回さずに）縮めて枠の中へ
+  const tFrame = zoneFrame("T")
+  const insetTransform = ROTATE_FLOOR_MAP_180
+    ? `translate(${insetContent.x} ${insetContent.y}) scale(${insetScale}) translate(${-tFrameRot.x} ${-tFrameRot.y}) rotate(180 ${ROTATE_CX} ${ROTATE_CY})`
+    : `translate(${insetContent.x} ${insetContent.y}) scale(${insetScale}) translate(${-tFrame.x} ${-tFrame.y})`
+
+  // 左右の手がかり（矢印の向きは、回転を切ると反対になる）
+  const k = ROTATE_FLOOR_MAP_180 ? 1 : -1
+  const leftGuide = toShown({ x: leftBlockX, y: imageMidY })
+  const rightGuide = toShown({ x: rightBlockX, y: imageMidY + 20 }) // やや下寄り
+  const walkwayA = toShown({ x: FLOOR_IMAGE.x, y: WALKWAY_Y })
+  const walkwayB = toShown({ x: FLOOR_IMAGE.x + FLOOR_IMAGE.w, y: WALKWAY_Y })
+  const walkwayLabel = toShown({ x: ROTATE_CX, y: WALKWAY_Y - 14 })
+  const compass = toShown({ x: 1000 - 50, y: WALKWAY_Y - 36 })
 
   return (
     <div className="space-y-2">
@@ -557,7 +651,7 @@ export default function HerbGardenFloorMap() {
           </button>
         )}
         <svg
-          viewBox={`${-layout.sideMargin} 0 ${1000 + layout.sideMargin * 2} ${layout.height}`}
+          viewBox={`${-sideMargin} 0 ${1000 + sideMargin * 2} ${viewHeight}`}
           className="w-full h-auto block"
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
@@ -581,10 +675,10 @@ export default function HerbGardenFloorMap() {
           </defs>
 
           {/* グリッド背景（向きに関係ない模様なので回さない） */}
-          <rect x={-layout.sideMargin} width={1000 + layout.sideMargin * 2} height={layout.height} fill="url(#floorgrid)" />
+          <rect x={-sideMargin} width={1000 + sideMargin * 2} height={viewHeight} fill="url(#floorgrid)" />
 
-          {/* ここから閉じタグまでが地図の図形（T エリアとミント園を除く）。文字はこの外に正立で描く */}
-          <g transform={ROTATE_FLOOR_MAP_180 ? `rotate(180 ${ROTATE_CX} ${layout.cy})` : undefined}>
+          {/* ここから閉じタグまでが地図の図形（T は引き出し図に描く）。文字はこの外に正立で描く */}
+          <g transform={ROTATE_FLOOR_MAP_180 ? `rotate(180 ${ROTATE_CX} ${ROTATE_CY})` : undefined}>
             {/* 平面図背景画像 */}
             <image
               href="/ハーブ園図面加工後.png"
@@ -604,87 +698,85 @@ export default function HerbGardenFloorMap() {
             {plots.filter((plot) => plot.zone !== "T").map(renderPlot)}
           </g>
 
-          {/* ミント園と T エリア。回したときは、回した先から左上へ移す */}
-          <g
-            transform={
-              ROTATE_FLOOR_MAP_180
-                ? `translate(${layout.mintShift.dx} ${layout.mintShift.dy}) rotate(180 ${ROTATE_CX} ${layout.cy})`
-                : undefined
-            }
-          >
-            {/* ミント園（別枠）枠線 */}
-            <rect
-              x={MINT_FRAME.x} y={MINT_FRAME.y} width={MINT_FRAME.w} height={MINT_FRAME.h}
-              rx={4}
-              fill="rgba(29,158,117,0.04)"
-              stroke="rgba(29,158,117,0.3)"
-              strokeWidth={0.8}
-              strokeDasharray="4,3"
-              className="pointer-events-none"
+          {/* 位置の手がかり（園の輪郭の外の余白。文字・矢印は正立で、回転の外に描く） */}
+          <g className="pointer-events-none select-none">
+            {/* 歩道：図面の上端に沿った細い破線。園に接しているので矢印は付けない */}
+            <line
+              x1={walkwayA.x} y1={walkwayA.y} x2={walkwayB.x} y2={walkwayB.y}
+              stroke={GUIDE_COLOR}
+              strokeOpacity={0.6}
+              strokeWidth={1.2}
+              strokeDasharray="10,6"
             />
+            <GuideText text="歩道" x={walkwayLabel.x} y={walkwayLabel.y} />
+
+            {/* 用水路・神社：園から離れているので、その方向（左）を指す矢印を添える。
+                幅を取らないよう縦書きにし、矢印は文字の上に置く */}
+            <GuideArrow x={leftGuide.x} y={leftGuide.y - 86 * k} dx={-k} dy={0} />
+            <GuideText text="用水路・神社" x={leftGuide.x} y={leftGuide.y} vertical />
+
+            {/* トイレ・駐車場：同じく離れているので、文字の下に下向きの矢印 */}
+            <GuideText text="トイレ・駐車場" x={rightGuide.x} y={rightGuide.y} vertical />
+            <GuideArrow x={rightGuide.x} y={rightGuide.y + 100 * k} dx={0} dy={k} />
+
+            {/* 方位記号。回したときは 左＝北・上＝東・右＝南・下＝西 */}
+            <g>
+              <line x1={compass.x - 12} y1={compass.y} x2={compass.x + 12} y2={compass.y} stroke={GUIDE_COLOR} strokeWidth={1.2} />
+              <line x1={compass.x} y1={compass.y - 12} x2={compass.x} y2={compass.y + 12} stroke={GUIDE_COLOR} strokeWidth={1.2} />
+              <GuideText text="北" x={compass.x - 25 * k} y={compass.y} size={16} />
+              <GuideText text="東" x={compass.x} y={compass.y - 25 * k} size={16} />
+              <GuideText text="南" x={compass.x + 25 * k} y={compass.y} size={16} />
+              <GuideText text="西" x={compass.x} y={compass.y + 25 * k} size={16} />
+            </g>
+          </g>
+
+          {/* T（ミント園）の引き出し図。S の近くの印から細い実線で引き出す */}
+          <line
+            x1={marker.x} y1={marker.y} x2={attach.x} y2={attach.y}
+            stroke={INSET_COLOR}
+            strokeWidth={1.2}
+            className="pointer-events-none"
+          />
+          <g className="pointer-events-none select-none">
+            <circle cx={marker.x} cy={marker.y} r={MARKER_R} fill="#ffffff" stroke={INSET_COLOR} strokeWidth={1.4} />
+            <text
+              x={marker.x} y={marker.y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={13}
+              fontWeight={700}
+              fill={INSET_COLOR}
+            >
+              T
+            </text>
+          </g>
+          {/* 引き出した枠は実線・白地にして、エリアの破線の枠と見分ける */}
+          <rect
+            x={inset.x} y={inset.y} width={inset.w} height={inset.h}
+            rx={4}
+            fill="#ffffff"
+            stroke={INSET_COLOR}
+            strokeWidth={1.4}
+            className="pointer-events-none"
+          />
+          <text
+            x={inset.x + INSET_PAD} y={inset.y + 18}
+            fontSize={16}
+            fontWeight={700}
+            fill={INSET_COLOR}
+            className="pointer-events-none select-none"
+          >
+            T ミント園（拡大図）
+          </text>
+          <g transform={insetTransform}>
             {renderZone("T")}
             {plots.filter((plot) => plot.zone === "T").map(renderPlot)}
           </g>
 
-          {/* ミント園のラベル。枠の上端の中央に置く */}
-          {(() => {
-            const m = shiftMint(placeRect(MINT_FRAME, layout.cy))
-            return (
-              <text
-                x={m.x + m.w / 2} y={m.y + 14}
-                textAnchor="middle"
-                fontSize={9}
-                fill="#5f5e5a"
-                fillOpacity={0.6}
-                className="pointer-events-none select-none"
-              >
-                ミント園（別枠）
-              </text>
-            )
-          })()}
-
-          {/* 位置の手がかり（園の輪郭の外の余白。文字は正立） */}
-          <g className="pointer-events-none select-none">
-            {/* 歩道：図面の上端に沿った細い線 */}
-            {(() => {
-              const a = placePoint(FLOOR_IMAGE.x, layout.walkwayY, layout.cy)
-              const b = placePoint(FLOOR_IMAGE.x + FLOOR_IMAGE.w, layout.walkwayY, layout.cy)
-              return (
-                <line
-                  x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke={GUIDE_COLOR}
-                  strokeOpacity={0.6}
-                  strokeWidth={1.2}
-                  strokeDasharray="10,6"
-                />
-              )
-            })()}
-            {guideLabels.map((g) => (
-              <GuideText key={g.text} text={g.text} x={g.x} y={g.y} vertical={g.vertical} />
-            ))}
-            {/* 方位記号。回したときは 左＝北・上＝東・右＝南・下＝西 */}
-            {(() => {
-              const c = placePoint(1000 - 50, layout.walkwayY - 36, layout.cy)
-              const k = ROTATE_FLOOR_MAP_180 ? 1 : -1
-              const ARM = 12
-              const AT = 25
-              return (
-                <g>
-                  <line x1={c.x - ARM} y1={c.y} x2={c.x + ARM} y2={c.y} stroke={GUIDE_COLOR} strokeWidth={1.2} />
-                  <line x1={c.x} y1={c.y - ARM} x2={c.x} y2={c.y + ARM} stroke={GUIDE_COLOR} strokeWidth={1.2} />
-                  <GuideText text="北" x={c.x - AT * k} y={c.y} size={16} />
-                  <GuideText text="東" x={c.x} y={c.y - AT * k} size={16} />
-                  <GuideText text="南" x={c.x + AT * k} y={c.y} size={16} />
-                  <GuideText text="西" x={c.x} y={c.y + AT * k} size={16} />
-                </g>
-              )
-            })()}
-          </g>
-
-          {/* ゾーンラベル（マーカーに隠れないよう最後に描く）。回したあとの枠を基準に置く */}
+          {/* ゾーンラベル（マーカーに隠れないよう最後に描く）。回したあとの枠を基準に置く。
+              T は引き出し図の中の枠を基準にする */}
           {ZONES.map((zone) => {
-            const placed = placeRect(zoneFrame(zone), layout.cy)
-            const f = zone === "T" ? shiftMint(placed) : placed
+            const f = zone === "T" ? insetContent : toShownRect(rotRect(zoneFrame(zone)))
             // 回すと上下・左右が入れ替わる
             const atBottom = LABEL_AT_BOTTOM.has(zone) !== ROTATE_FLOOR_MAP_180
             const y = atBottom
@@ -693,7 +785,11 @@ export default function HerbGardenFloorMap() {
             return (
               <text
                 key={zone}
-                x={ROTATE_FLOOR_MAP_180 ? f.x + f.w - LABEL_INSET : f.x + LABEL_INSET}
+                x={
+                  ROTATE_FLOOR_MAP_180
+                    ? f.x + f.w - LABEL_INSET + (ROTATED_LABEL_NUDGE_X[zone] ?? 0)
+                    : f.x + LABEL_INSET
+                }
                 y={y}
                 textAnchor={ROTATE_FLOOR_MAP_180 ? "end" : "start"}
                 fontSize={LABEL_FONT_SIZE}
@@ -774,5 +870,25 @@ function GuideText({
         </text>
       ))}
     </>
+  )
+}
+
+// 位置の手がかりの矢印。(x, y) は矢印の中心、(dx, dy) は向き（-1・0・1）
+function GuideArrow({ x, y, dx, dy }: { x: number; y: number; dx: number; dy: number }) {
+  const LEN = dx !== 0 ? 30 : 40 // 横向きは余白の幅に収まる長さ
+  const HEAD = 9
+  const tip = { x: x + (dx * LEN) / 2, y: y + (dy * LEN) / 2 }
+  const tail = { x: x - (dx * LEN) / 2, y: y - (dy * LEN) / 2 }
+  // 矢じりは、向きに直交する方向へ開く
+  const px = -dy
+  const py = dx
+  const back = { x: tip.x - dx * HEAD, y: tip.y - dy * HEAD }
+  return (
+    <g stroke={GUIDE_COLOR} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <line x1={tail.x} y1={tail.y} x2={tip.x} y2={tip.y} />
+      <polyline
+        points={`${back.x + px * HEAD * 0.7},${back.y + py * HEAD * 0.7} ${tip.x},${tip.y} ${back.x - px * HEAD * 0.7},${back.y - py * HEAD * 0.7}`}
+      />
+    </g>
   )
 }
