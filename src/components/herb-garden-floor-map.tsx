@@ -505,7 +505,16 @@ function useMapZoom(maxScale: number, suppressClickRef: RefObject<boolean>) {
 
 // ─── コンポーネント ─────────────────────────────────────────────────────────────
 
-export default function HerbGardenFloorMap() {
+/**
+ * variant
+ *   "full" … マップの画面（/areas）。カードの中でエリアをタップしてエリア詳細へ進む
+ *   "home" … ホーム画面。カードは小さいので、エリアを1つずつタップさせると押し間違える。
+ *            カードのどこをタップしても全画面を開き、エリアは全画面の中で選ばせる。
+ *            カードの地図からは、小さくすると読めない位置の手がかりとミント園の引き出し図、
+ *            凡例を省き、図面とエリアの範囲に寄せて描く。全画面は "full" と同じ
+ */
+export default function HerbGardenFloorMap({ variant = "full" }: { variant?: "full" | "home" } = {}) {
+  const isHome = variant === "home"
   const router = useRouter()
   const suppressClickRef = useRef(false)
   // 拡大・移動は全画面の地図だけ。カードの中では見える範囲が増えないうえ、
@@ -822,9 +831,25 @@ export default function HerbGardenFloorMap() {
 
   const mapViewBox = `${-sideMargin} 0 ${1000 + sideMargin * 2} ${viewHeight}`
 
+  // ホームのカード用の、手がかりと引き出し図を省いた描画範囲。
+  // 図面・T 以外の枠・エリア名・点が収まる範囲に、少し余白を足す
+  const compactParts: Rect[] = [
+    rotRect(FLOOR_IMAGE),
+    ...obstacleFrames,
+    ...obstacleLabels,
+    ...obstacleDots,
+  ].map(toShownRect)
+  const COMPACT_PAD = 8
+  const compactLeft = Math.min(...compactParts.map((r) => r.x)) - COMPACT_PAD
+  const compactTop = Math.min(...compactParts.map((r) => r.y)) - COMPACT_PAD
+  const compactRight = Math.max(...compactParts.map((r) => r.x + r.w)) + COMPACT_PAD
+  const compactBottom = Math.max(...compactParts.map((r) => r.y + r.h)) + COMPACT_PAD
+  const compactViewBox = `${compactLeft} ${compactTop} ${compactRight - compactLeft} ${compactBottom - compactTop}`
+
   // 地図の中身。カードと全画面の両方で使う
-  const mapSvg = (
-    <svg viewBox={mapViewBox} className="w-full h-auto block">
+  // compact … ホームのカード用（手がかり・引き出し図・T の名前を省き、範囲を寄せる）
+  const renderMapSvg = (compact: boolean) => (
+    <svg viewBox={compact ? compactViewBox : mapViewBox} className="w-full h-auto block">
           <defs>
             <pattern
               id="floorgrid"
@@ -880,6 +905,7 @@ export default function HerbGardenFloorMap() {
           </g>
 
           {/* 位置の手がかり（園の輪郭の外の余白。文字・矢印は正立で、回転の外に描く） */}
+          {!compact && (
           <g className="pointer-events-none select-none">
             {/* 歩道：図面の上端に沿った細い破線。園に接しているので矢印は付けない */}
             <line
@@ -910,8 +936,10 @@ export default function HerbGardenFloorMap() {
               <GuideText text="西" x={compass.x} y={compass.y + 25 * k} size={16} />
             </g>
           </g>
+          )}
 
           {/* T（ミント園）の引き出し図。区画から細い実線で引き出す */}
+          {!compact && (<>
           <line
             x1={leaderStart.x} y1={leaderStart.y} x2={attach.x} y2={attach.y}
             stroke={INSET_COLOR}
@@ -942,10 +970,11 @@ export default function HerbGardenFloorMap() {
             {renderZone("T")}
             {plots.filter((plot) => plot.zone === "T").map(renderPlot)}
           </g>
+          </>)}
 
           {/* ゾーンラベル（マーカーに隠れないよう最後に描く）。回したあとの枠を基準に置く。
-              T は引き出し図の中の枠を基準にする */}
-          {ZONES.map((zone) => {
+              T は引き出し図の中の枠を基準にする（ホームのカードでは引き出し図ごと省く） */}
+          {ZONES.filter((zone) => !(compact && zone === "T")).map((zone) => {
             const f = zone === "T" ? insetContent : toShownRect(rotRect(zoneFrame(zone)))
             let x: number
             let y: number
@@ -987,6 +1016,8 @@ export default function HerbGardenFloorMap() {
   )
 
   // 拡大・移動をかける地図（カード・全画面で共通）
+  const mapSvg = renderMapSvg(false)
+
   const zoomedMap = (z: ReturnType<typeof useMapZoom>) => (
     <div
       ref={z.contentRef}
@@ -1013,13 +1044,32 @@ export default function HerbGardenFloorMap() {
           suppressClickRef.current = false
         }}
       >
-        <div className="absolute top-2 right-2 z-10">
-          {/* 地図だけを画面いっぱいに出す。拡大・移動はそちらで行う */}
-          <button onClick={() => setFullOpen(true)} className={mapButtonClass}>
-            拡大
-          </button>
-        </div>
-        {mapSvg}
+        {isHome ? (
+          <>
+            {/* ホームでは地図全体を1つのボタンにする。エリアは全画面の中で選ぶ */}
+            <button
+              type="button"
+              onClick={() => setFullOpen(true)}
+              aria-label="園内図を全画面で開く"
+              className="absolute inset-0 z-10 w-full h-full cursor-pointer"
+            />
+            {renderMapSvg(true)}
+            {/* 地図の上に札を重ねると小さな地図の一部が隠れるので、下に1行で添える */}
+            <p className="text-[11px] text-center text-herb-primary font-medium py-1.5 border-t border-gray-100">
+              タップすると拡大して、エリアを選べます
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="absolute top-2 right-2 z-10">
+              {/* 地図だけを画面いっぱいに出す。拡大・移動はそちらで行う */}
+              <button onClick={() => setFullOpen(true)} className={mapButtonClass}>
+                拡大
+              </button>
+            </div>
+            {mapSvg}
+          </>
+        )}
       </div>
 
       {/* 全画面の地図。カードの地図はそのまま残し、上に重ねて出す */}
@@ -1054,8 +1104,8 @@ export default function HerbGardenFloorMap() {
           document.body
         )}
 
-      {/* 凡例 */}
-      {plots.length > 0 && (
+      {/* 凡例（ホームでは省く） */}
+      {!isHome && plots.length > 0 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 px-1">
           {Object.entries(TYPE_LABELS).map(([type, label]) => {
             const count = plots.filter((p) => p.type === type).length

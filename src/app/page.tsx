@@ -11,9 +11,9 @@ import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
 import PushSubscribeButton from "@/components/push-subscribe-button"
 import GardenRuleNotice from "@/components/garden-rule-notice"
+import LatestNewsCard from "@/components/latest-news-card"
+import HerbGardenFloorMap from "@/components/herb-garden-floor-map"
 import { useScrollRestore } from "@/hooks/useScrollRestore"
-
-const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
 
 // feature_flowerテキストから開花月を推定（1-12）
 function bloomMonthsFromText(text: string | null | undefined): Set<number> {
@@ -146,14 +146,6 @@ export default function HomePage() {
     .filter((p, i, list) => list.findIndex((q) => q.name === p.name) === i)
     .slice(0, 8)
 
-  const areaCounts = plants.reduce(
-    (acc, p) => {
-      acc[p.area] = (acc[p.area] || 0) + 1
-      return acc
-    },
-    {} as Record<string, number>
-  )
-
   const filteredPlants = searchQuery
     ? plants.filter(
         (p) =>
@@ -213,6 +205,9 @@ export default function HomePage() {
           />
         </div>
       </section>
+
+      {/* 最新のお知らせ1件。0件のときは枠ごと出さない。検索中は検索結果を優先して出さない */}
+      {!searchQuery && <LatestNewsCard />}
 
       {/* Push Notification Opt-in */}
       <section className="px-4 mt-4 flex justify-center">
@@ -326,9 +321,11 @@ export default function HomePage() {
       {/* Area Overview */}
       {!searchQuery && (
         <>
+          {/* 園内図。/areas と同じ全体マップの部品を使う。ホームでは地図が小さいので、
+              カードのどこをタップしても全画面が開き、エリアは全画面の中で選ぶ */}
           <section className="px-4 mt-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold">エリアマップ</h2>
+              <h2 className="text-base font-bold">園内図</h2>
               <Link
                 href="/areas"
                 className="text-xs text-herb-primary font-medium flex items-center gap-0.5"
@@ -337,21 +334,8 @@ export default function HomePage() {
                 <ChevronRight size={14} />
               </Link>
             </div>
-            <div className="grid grid-cols-5 gap-2">
-              {AREAS.map((area) => (
-                <Link
-                  key={area}
-                  href={`/areas/${area}`}
-                  className={`area-${area.toLowerCase()} rounded-xl p-2.5 text-center card-hover shadow-sm`}
-                >
-                  <span className="text-lg font-bold text-herb-text">
-                    {area}
-                  </span>
-                  <p className="text-[10px] text-herb-text-secondary mt-0.5">
-                    {areaCounts[area] || 0}種
-                  </p>
-                </Link>
-              ))}
+            <div className="bg-white rounded-2xl p-2 shadow-sm">
+              <HerbGardenFloorMap variant="home" />
             </div>
           </section>
 
