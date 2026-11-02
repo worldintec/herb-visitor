@@ -11,7 +11,6 @@ import { getRepresentativePhoto } from "@/lib/photo-utils"
 import PlantImage from "@/components/plant-image"
 import PushSubscribeButton from "@/components/push-subscribe-button"
 import GardenRuleNotice from "@/components/garden-rule-notice"
-import LatestNewsCard from "@/components/latest-news-card"
 import HerbGardenFloorMap from "@/components/herb-garden-floor-map"
 import { useScrollRestore } from "@/hooks/useScrollRestore"
 
@@ -205,9 +204,6 @@ export default function HomePage() {
           />
         </div>
       </section>
-
-      {/* 最新のお知らせ1件。0件のときは枠ごと出さない。検索中は検索結果を優先して出さない */}
-      {!searchQuery && <LatestNewsCard />}
 
       {/* Push Notification Opt-in */}
       <section className="px-4 mt-4 flex justify-center">
