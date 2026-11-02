@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, type RefObject } from "react"
+import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import type { MapPlot } from "@/types/database"
 import { fetchMapPlots, fetchZoneOffsets, MAP_LOAD_ERROR } from "@/lib/map-api"
@@ -268,7 +269,14 @@ const TYPE_LABELS: Record<string, string> = {
 // transform: scaleでズーム・パンを実装し、ネイティブズームはtouch-action: noneで止める。
 
 const MIN_SCALE = 1
-const MAX_SCALE = 4
+const MAX_SCALE = 4 // カードの中の地図
+const FULL_MAX_SCALE = 8 // 全画面の地図（画面の幅に合わせた大きさからの倍率）
+// 全画面を開いたときの倍率。地図は横長なので、縦向きの画面で幅に合わせるだけでは
+// カードとほぼ同じ大きさにしかならない。地図の高さが画面の約4割になる倍率から始める
+const FULL_INITIAL_HEIGHT_RATIO = 0.42
+const FULL_INITIAL_MAX_SCALE = 3
+// 指がこの距離（px）より動いたら、タップではなく移動とみなす
+const TAP_SLOP = 4
 
 interface MapTransform {
   scale: number
@@ -298,15 +306,227 @@ interface ZoomGesture {
   moved: boolean
 }
 
+/**
+ * 地図の拡大・移動（指で広げる・なぞる、ダブルタップ、Ctrl＋ホイール）。
+ * カードの中の地図と全画面の地図で、それぞれ1つずつ使う。
+ *
+ * 地図は容器の幅いっぱいに描き、それを包む contentRef の要素に translate＋scale をかける。
+ * 地図が容器より小さい向きは中央に置き、大きい向きは端が容器の内側に入りすぎないよう止める。
+ * 地図の高さは contentRef の offsetHeight（変形をかける前の高さ）で測る。
+ * 指を動かした・2本指で広げたときは suppressClickRef を立て、離したあとのクリックで
+ * エリアの詳細へ飛ばないようにする（指を置くたびに下ろすので、取りこぼしても次のタップは生きる）。
+ */
+function useMapZoom(maxScale: number, suppressClickRef: RefObject<boolean>) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [transform, setTransform] = useState<MapTransform>({ scale: 1, x: 0, y: 0 })
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const gestureRef = useRef<ZoomGesture | null>(null)
+
+  function localPoint(e: { clientX: number; clientY: number }): { x: number; y: number } {
+    const rect = containerRef.current!.getBoundingClientRect()
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  function clampTransform(t: MapTransform): MapTransform {
+    const el = containerRef.current
+    if (!el) return t
+    const { width, height } = el.getBoundingClientRect()
+    const contentH = contentRef.current?.offsetHeight ?? height
+    const scale = clampNumber(t.scale, MIN_SCALE, maxScale)
+    const w = width * scale
+    const h = contentH * scale
+    return {
+      scale,
+      x: w <= width ? (width - w) / 2 : clampNumber(t.x, width - w, 0),
+      y: h <= height ? (height - h) / 2 : clampNumber(t.y, height - h, 0),
+    }
+  }
+
+  function zoomAt(point: { x: number; y: number }, prev: MapTransform, newScale: number): MapTransform {
+    const contentX = (point.x - prev.x) / prev.scale
+    const contentY = (point.y - prev.y) / prev.scale
+    return clampTransform({
+      scale: newScale,
+      x: point.x - contentX * newScale,
+      y: point.y - contentY * newScale,
+    })
+  }
+
+  // 地図の中心を容器の中心に合わせて、指定の倍率にする
+  function zoomCentered(scale: number) {
+    const el = containerRef.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    const contentH = contentRef.current?.offsetHeight ?? height
+    setTransform(
+      clampTransform({ scale, x: (width - width * scale) / 2, y: (height - contentH * scale) / 2 })
+    )
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (pointersRef.current.size === 0) suppressClickRef.current = false
+    // 指が地図の外へ出ても動きを追えるようにする。取れない場合（指がもう離れているなど）は
+    // 例外になるが、拡大・移動そのものは続けられるので止めない
+    try {
+      ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    } catch {
+      // 無視
+    }
+    pointersRef.current.set(e.pointerId, localPoint(e))
+    const pts = Array.from(pointersRef.current.values())
+    if (pts.length === 1) {
+      gestureRef.current = {
+        mode: "pan",
+        startTransform: transform,
+        startMidpoint: pts[0],
+        startDist: 0,
+        moved: false,
+      }
+    } else if (pts.length === 2) {
+      gestureRef.current = {
+        mode: "pinch",
+        startTransform: transform,
+        startMidpoint: getMidpoint(pts),
+        startDist: getDistance(pts[0], pts[1]),
+        moved: true,
+      }
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!pointersRef.current.has(e.pointerId)) return
+    pointersRef.current.set(e.pointerId, localPoint(e))
+    const gesture = gestureRef.current
+    if (!gesture) return
+    const pts = Array.from(pointersRef.current.values())
+
+    if (gesture.mode === "pan" && pts.length === 1) {
+      const dx = pts[0].x - gesture.startMidpoint.x
+      const dy = pts[0].y - gesture.startMidpoint.y
+      if (Math.hypot(dx, dy) > TAP_SLOP) gesture.moved = true
+      if (gesture.moved) {
+        e.preventDefault()
+        setTransform(
+          clampTransform({
+            scale: gesture.startTransform.scale,
+            x: gesture.startTransform.x + dx,
+            y: gesture.startTransform.y + dy,
+          })
+        )
+      }
+    } else if (gesture.mode === "pinch" && pts.length === 2) {
+      e.preventDefault()
+      const dist = getDistance(pts[0], pts[1])
+      const mid = getMidpoint(pts)
+      const newScale = clampNumber(
+        gesture.startTransform.scale * (dist / gesture.startDist),
+        MIN_SCALE,
+        maxScale
+      )
+      gesture.moved = true
+      const contentX = (gesture.startMidpoint.x - gesture.startTransform.x) / gesture.startTransform.scale
+      const contentY = (gesture.startMidpoint.y - gesture.startTransform.y) / gesture.startTransform.scale
+      setTransform(
+        clampTransform({
+          scale: newScale,
+          x: mid.x - contentX * newScale,
+          y: mid.y - contentY * newScale,
+        })
+      )
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    pointersRef.current.delete(e.pointerId)
+    if (gestureRef.current?.moved) {
+      suppressClickRef.current = true
+    }
+    if (pointersRef.current.size === 0) {
+      gestureRef.current = null
+    } else if (pointersRef.current.size === 1) {
+      // 2本指→1本指に減ったらパンを再開
+      const [pt] = Array.from(pointersRef.current.values())
+      gestureRef.current = {
+        mode: "pan",
+        startTransform: transform,
+        startMidpoint: pt,
+        startDist: 0,
+        moved: gestureRef.current?.moved ?? false,
+      }
+    }
+  }
+
+  function onDoubleClick(e: React.MouseEvent) {
+    const point = localPoint(e)
+    setTransform((prev) =>
+      prev.scale > MIN_SCALE ? clampTransform({ scale: MIN_SCALE, x: 0, y: 0 }) : zoomAt(point, prev, 2.2)
+    )
+  }
+
+  function onWheel(e: React.WheelEvent) {
+    if (!e.ctrlKey) return
+    e.preventDefault()
+    const point = localPoint(e)
+    setTransform((prev) =>
+      zoomAt(point, prev, clampNumber(prev.scale * (1 - e.deltaY * 0.01), MIN_SCALE, maxScale))
+    )
+  }
+
+  return {
+    containerRef,
+    contentRef,
+    transform,
+    fitAll: () => setTransform(clampTransform({ scale: MIN_SCALE, x: 0, y: 0 })),
+    zoomCentered,
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
+      onPointerCancel: onPointerUp,
+      onDoubleClick,
+      onWheel,
+    },
+  }
+}
+
 // ─── コンポーネント ─────────────────────────────────────────────────────────────
 
 export default function HerbGardenFloorMap() {
   const router = useRouter()
-  const mapContainerRef = useRef<HTMLDivElement>(null)
-  const [transform, setTransform] = useState<MapTransform>({ scale: 1, x: 0, y: 0 })
-  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
-  const gestureRef = useRef<ZoomGesture | null>(null)
   const suppressClickRef = useRef(false)
+  const card = useMapZoom(MAX_SCALE, suppressClickRef)
+  const full = useMapZoom(FULL_MAX_SCALE, suppressClickRef)
+  // 地図だけを画面いっぱいに出しているか
+  const [fullOpen, setFullOpen] = useState(false)
+
+  // 全画面のあいだは、後ろの画面がスクロールしないようにし、Esc で閉じられるようにする
+  useEffect(() => {
+    if (!fullOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFullOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    // 開いた直後に、地図の高さが画面の約4割になる倍率で、中央を見せる
+    const frame = requestAnimationFrame(() => {
+      const el = full.containerRef.current
+      const content = full.contentRef.current
+      if (!el || !content) return
+      const { height } = el.getBoundingClientRect()
+      const fitH = content.offsetHeight
+      const scale = clampNumber((height * FULL_INITIAL_HEIGHT_RATIO) / fitH, MIN_SCALE, FULL_INITIAL_MAX_SCALE)
+      full.zoomCentered(scale)
+    })
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener("keydown", onKey)
+      cancelAnimationFrame(frame)
+    }
+    // full の関数は毎回作り直されるが、開いたときに1回だけ合わせればよい
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullOpen])
   const [plots, setPlots] = useState<MapPlot[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -467,141 +687,6 @@ export default function HerbGardenFloorMap() {
     )
   }
 
-  // ── ズーム・パンのジェスチャー処理 ──────────────────────────────────────────
-  function localPoint(e: { clientX: number; clientY: number }): { x: number; y: number } {
-    const rect = mapContainerRef.current!.getBoundingClientRect()
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
-  }
-
-  function clampTransform(t: MapTransform): MapTransform {
-    const el = mapContainerRef.current
-    if (!el) return t
-    const { width, height } = el.getBoundingClientRect()
-    const scale = clampNumber(t.scale, MIN_SCALE, MAX_SCALE)
-    if (scale === MIN_SCALE) return { scale, x: 0, y: 0 }
-    const minX = width - width * scale
-    const minY = height - height * scale
-    return {
-      scale,
-      x: clampNumber(t.x, minX, 0),
-      y: clampNumber(t.y, minY, 0),
-    }
-  }
-
-  function zoomAt(point: { x: number; y: number }, prev: MapTransform, newScale: number): MapTransform {
-    const contentX = (point.x - prev.x) / prev.scale
-    const contentY = (point.y - prev.y) / prev.scale
-    return clampTransform({
-      scale: newScale,
-      x: point.x - contentX * newScale,
-      y: point.y - contentY * newScale,
-    })
-  }
-
-  function handlePointerDown(e: React.PointerEvent) {
-    ;(e.target as Element).setPointerCapture?.(e.pointerId)
-    pointersRef.current.set(e.pointerId, localPoint(e))
-    const pts = Array.from(pointersRef.current.values())
-    if (pts.length === 1) {
-      gestureRef.current = {
-        mode: "pan",
-        startTransform: transform,
-        startMidpoint: pts[0],
-        startDist: 0,
-        moved: false,
-      }
-    } else if (pts.length === 2) {
-      gestureRef.current = {
-        mode: "pinch",
-        startTransform: transform,
-        startMidpoint: getMidpoint(pts),
-        startDist: getDistance(pts[0], pts[1]),
-        moved: false,
-      }
-    }
-  }
-
-  function handlePointerMove(e: React.PointerEvent) {
-    if (!pointersRef.current.has(e.pointerId)) return
-    pointersRef.current.set(e.pointerId, localPoint(e))
-    const gesture = gestureRef.current
-    if (!gesture) return
-    const pts = Array.from(pointersRef.current.values())
-
-    if (gesture.mode === "pan" && pts.length === 1) {
-      const dx = pts[0].x - gesture.startMidpoint.x
-      const dy = pts[0].y - gesture.startMidpoint.y
-      if (Math.hypot(dx, dy) > 4) gesture.moved = true
-      if (gesture.startTransform.scale > MIN_SCALE) {
-        e.preventDefault()
-        setTransform(
-          clampTransform({
-            scale: gesture.startTransform.scale,
-            x: gesture.startTransform.x + dx,
-            y: gesture.startTransform.y + dy,
-          })
-        )
-      }
-    } else if (gesture.mode === "pinch" && pts.length === 2) {
-      e.preventDefault()
-      const dist = getDistance(pts[0], pts[1])
-      const mid = getMidpoint(pts)
-      const newScale = clampNumber(
-        gesture.startTransform.scale * (dist / gesture.startDist),
-        MIN_SCALE,
-        MAX_SCALE
-      )
-      gesture.moved = true
-      const contentX = (gesture.startMidpoint.x - gesture.startTransform.x) / gesture.startTransform.scale
-      const contentY = (gesture.startMidpoint.y - gesture.startTransform.y) / gesture.startTransform.scale
-      setTransform(
-        clampTransform({
-          scale: newScale,
-          x: mid.x - contentX * newScale,
-          y: mid.y - contentY * newScale,
-        })
-      )
-    }
-  }
-
-  function handlePointerUp(e: React.PointerEvent) {
-    pointersRef.current.delete(e.pointerId)
-    if (gestureRef.current?.moved) {
-      suppressClickRef.current = true
-    }
-    if (pointersRef.current.size === 0) {
-      gestureRef.current = null
-    } else if (pointersRef.current.size === 1) {
-      // 2本指→1本指に減ったらパンを再開
-      const [pt] = Array.from(pointersRef.current.values())
-      gestureRef.current = {
-        mode: "pan",
-        startTransform: transform,
-        startMidpoint: pt,
-        startDist: 0,
-        moved: gestureRef.current?.moved ?? false,
-      }
-    }
-  }
-
-  function handleDoubleClick(e: React.MouseEvent) {
-    const point = localPoint(e)
-    setTransform((prev) =>
-      prev.scale > MIN_SCALE
-        ? { scale: MIN_SCALE, x: 0, y: 0 }
-        : zoomAt(point, prev, 2.2)
-    )
-  }
-
-  function handleWheel(e: React.WheelEvent) {
-    if (!e.ctrlKey) return
-    e.preventDefault()
-    const point = localPoint(e)
-    setTransform((prev) =>
-      zoomAt(point, prev, clampNumber(prev.scale * (1 - e.deltaY * 0.01), MIN_SCALE, MAX_SCALE))
-    )
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-gray-400">
@@ -721,36 +806,11 @@ export default function HerbGardenFloorMap() {
   const walkwayLabel = toShown({ x: ROTATE_CX, y: WALKWAY_Y - 14 })
   const compass = toShown({ x: 1000 - 50, y: WALKWAY_Y - 36 })
 
-  return (
-    <div className="space-y-2">
-      {/* マップSVG（アプリ内ズーム・パン対応） */}
-      <div
-        ref={mapContainerRef}
-        className="relative bg-white rounded-xl overflow-hidden border border-gray-100 select-none"
-        style={{ touchAction: "none" }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-        onWheel={handleWheel}
-      >
-        {transform.scale > MIN_SCALE && (
-          <button
-            onClick={() => setTransform({ scale: MIN_SCALE, x: 0, y: 0 })}
-            className="absolute top-2 right-2 z-10 bg-white/90 backdrop-blur rounded-full px-3 py-1.5 text-xs font-medium text-herb-primary shadow border border-gray-200"
-          >
-            全体表示に戻す
-          </button>
-        )}
-        <svg
-          viewBox={`${-sideMargin} 0 ${1000 + sideMargin * 2} ${viewHeight}`}
-          className="w-full h-auto block"
-          style={{
-            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-            transformOrigin: "0 0",
-          }}
-        >
+  const mapViewBox = `${-sideMargin} 0 ${1000 + sideMargin * 2} ${viewHeight}`
+
+  // 地図の中身。カードと全画面の両方で使う
+  const mapSvg = (
+    <svg viewBox={mapViewBox} className="w-full h-auto block">
           <defs>
             <pattern
               id="floorgrid"
@@ -909,8 +969,79 @@ export default function HerbGardenFloorMap() {
               </text>
             )
           })}
-        </svg>
+    </svg>
+  )
+
+  // 拡大・移動をかける地図（カード・全画面で共通）
+  const zoomedMap = (z: ReturnType<typeof useMapZoom>) => (
+    <div
+      ref={z.contentRef}
+      style={{
+        transform: `translate(${z.transform.x}px, ${z.transform.y}px) scale(${z.transform.scale})`,
+        transformOrigin: "0 0",
+      }}
+    >
+      {mapSvg}
+    </div>
+  )
+
+  const mapButtonClass =
+    "bg-white/90 backdrop-blur rounded-full px-3 py-1.5 text-xs font-medium text-herb-primary shadow border border-gray-200"
+
+  return (
+    <div className="space-y-2">
+      {/* マップSVG（アプリ内ズーム・パン対応） */}
+      <div
+        ref={card.containerRef}
+        className="relative bg-white rounded-xl overflow-hidden border border-gray-100 select-none"
+        style={{ touchAction: "none" }}
+        {...card.handlers}
+      >
+        <div className="absolute top-2 right-2 z-10 flex gap-1.5">
+          {card.transform.scale > MIN_SCALE && (
+            <button onClick={card.fitAll} className={mapButtonClass}>
+              全体表示に戻す
+            </button>
+          )}
+          {/* 地図だけを画面いっぱいに出す。カードの中では大きくしても見える範囲が増えないため */}
+          <button onClick={() => setFullOpen(true)} className={mapButtonClass}>
+            拡大
+          </button>
+        </div>
+        {zoomedMap(card)}
       </div>
+
+      {/* 全画面の地図。カードの地図はそのまま残し、上に重ねて出す */}
+      {fullOpen &&
+        createPortal(
+          <div
+            ref={full.containerRef}
+            className="fixed inset-0 z-[80] bg-white overflow-hidden select-none"
+            style={{ touchAction: "none" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="園内マップ（全画面）"
+            {...full.handlers}
+          >
+            {zoomedMap(full)}
+            <div
+              className="absolute right-3 z-10 flex gap-2"
+              style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+            >
+              <button onClick={full.fitAll} className={mapButtonClass}>
+                全体表示
+              </button>
+              <button
+                onClick={() => setFullOpen(false)}
+                aria-label="閉じる"
+                className="w-9 h-9 rounded-full bg-white/90 backdrop-blur shadow border border-gray-200 flex items-center justify-center text-gray-700 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* 凡例 */}
       {plots.length > 0 && (
