@@ -13,8 +13,9 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'ハーブ園ガイド';
   const options = {
     body: data.body || '',
-    icon: '/icons/icon-192.svg',
-    badge: '/icons/icon-192.svg',
+    icon: '/icons/icon-192.png',
+    // Android の通知欄の小さなアイコン。白一色・背景透明でないと白い四角に見える
+    badge: '/icons/badge-96.png',
     data: { url: data.url || '/' },
   };
 
