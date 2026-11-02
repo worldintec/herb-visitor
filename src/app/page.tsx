@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { getMonth } from "date-fns"
 import { Search, Leaf, MapPin, ChevronRight, Sparkles } from "lucide-react"
 import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
@@ -167,8 +168,20 @@ export default function HomePage() {
   return (
     <div className="min-h-dvh">
       {/* Hero */}
-      <section className="hero-gradient px-5 pt-12 pb-8 rounded-b-3xl">
-        <div className="text-center">
+      {/* overflow-hidden で、はみ出したカカシを帯の角丸ごと切り取る */}
+      <section className="hero-gradient relative overflow-hidden px-5 pt-12 pb-8 rounded-b-3xl">
+        {/* 園のカカシの透かし。飾りなので読み上げない（alt="" と aria-hidden）。
+            文字の後ろに来ても読めるよう、白を 12% にとどめる */}
+        <Image
+          src="/images/scarecrow-white.png"
+          alt=""
+          aria-hidden
+          width={210}
+          height={290}
+          sizes="210px"
+          className="pointer-events-none select-none absolute -right-20 -bottom-6 h-[290px] w-auto opacity-[0.12]"
+        />
+        <div className="relative text-center">
           <div className="inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1 mb-4">
             <Leaf size={14} className="text-white" />
             <span className="text-white/90 text-xs font-medium">
@@ -407,6 +420,19 @@ export default function HomePage() {
           </section>
         </>
       )}
+
+      {/* 園の紋章。画面を開いた直後には見えない位置なので、あとから読み込む */}
+      <div className="flex justify-center px-4 pt-6 pb-10">
+        <Image
+          src="/images/emblem.png"
+          alt="見沼氷川公園ハーブ園"
+          width={200}
+          height={200}
+          sizes="200px"
+          loading="lazy"
+          className="w-[200px] h-auto"
+        />
+      </div>
     </div>
   )
 }
