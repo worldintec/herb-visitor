@@ -146,33 +146,65 @@ function segmentHitsRect(p: Point, q: Point, r: Rect): boolean {
 // エリア名の文字のおおよその幅と、ベースラインから文字の上端まで（大きさ28の大文字）
 const LABEL_W = 20
 const LABEL_CAP = 20
+// 名前を上下に並べるときの行の間隔（ベースラインどうし）。文字の箱（上下の余白込みで約39）
+// より広くし、上の名前と箱が重ならないようにする
+const LABEL_LINE = 40
+
+type LabelAnchor = { x: number; anchor: "start" | "end"; baseline: number }
+
+// 文字の右端（左寄せなら、おおよその幅を足す）
+function labelRight(a: LabelAnchor): number {
+  return a.anchor === "end" ? a.x : a.x + LABEL_W
+}
 
 /**
- * 回したときのエリア名の置き場所（右寄せの右端 x とベースライン y）。
- * 既定は枠の右下（G・Q は右上）。ROTATED_LABEL_BETWEEN にあるエリアは、
- * 指定した2つのエリア名のあいだの上に置く。frameOf は回したあとの枠を返す。
+ * 回したときのエリア名の置き場所（x と寄せ方とベースライン y）。
+ * 既定は枠の右下（G・Q は右上）。次の表にあるエリアは置き方を変える。
+ *   ROTATED_LABEL_BETWEEN … 指定した2つのエリア名のあいだの上
+ *   ROTATED_LABEL_BELOW   … 指定したエリア名の下
+ *   ROTATED_LABEL_CORNER  … 枠の指定した隅
+ * frameOf は回したあとの枠を返す。
  */
-function rotatedLabelAnchor(zone: Zone, frameOf: (z: Zone) => Rect): { right: number; baseline: number } {
+function rotatedLabelAnchor(zone: Zone, frameOf: (z: Zone) => Rect): LabelAnchor {
   const between = ROTATED_LABEL_BETWEEN[zone]
   if (between) {
     const l = rotatedLabelAnchor(between.left, frameOf)
     const r = rotatedLabelAnchor(between.right, frameOf)
     // 左の名前の右端と、右の名前の左端のまんなかに、文字の中心を置く
-    const center = (l.right + (r.right - LABEL_W)) / 2 + between.dx
+    const center = (labelRight(l) + (labelRight(r) - LABEL_W)) / 2 + between.dx
     // 2つの名前の上端より少し上に、ベースラインを置く
     const baseline = Math.min(l.baseline, r.baseline) - LABEL_CAP - 4 + between.dy
-    return { right: center + LABEL_W / 2, baseline }
+    return { x: center + LABEL_W / 2, anchor: "end", baseline }
+  }
+  const below = ROTATED_LABEL_BELOW[zone]
+  if (below) {
+    const o = rotatedLabelAnchor(below.of, frameOf)
+    // 基準の名前と右端をそろえ、その下の行に置く
+    return {
+      x: labelRight(o) + below.dx,
+      anchor: "end",
+      baseline: o.baseline + LABEL_LINE + below.dy,
+    }
   }
   const f = frameOf(zone)
+  const corner = ROTATED_LABEL_CORNER[zone]
+  if (corner) {
+    // 枠の左下の隅（左寄せ）
+    return {
+      x: f.x + LABEL_INSET + corner.dx,
+      anchor: "start",
+      baseline: f.y + f.h - LABEL_INSET + corner.dy,
+    }
+  }
   const atBottom = !LABEL_AT_BOTTOM.has(zone)
   const baseline = atBottom ? f.y + f.h - LABEL_INSET : f.y + LABEL_TOP_BASELINE
   const right = f.x + f.w - LABEL_INSET + (ROTATED_LABEL_NUDGE_X[zone] ?? 0)
-  return { right, baseline }
+  return { x: right, anchor: "end", baseline }
 }
 
 function rotatedLabelBox(zone: Zone, frameOf: (z: Zone) => Rect): Rect {
-  const { right, baseline } = rotatedLabelAnchor(zone, frameOf)
-  return { x: right - 22, y: baseline - 22, w: 22, h: 24 }
+  const a = rotatedLabelAnchor(zone, frameOf)
+  return { x: a.anchor === "end" ? a.x - 22 : a.x, y: a.baseline - 22, w: 22, h: 24 }
 }
 
 // ─── エリア名ラベル ─────────────────────────────────────────────────────────────
@@ -197,6 +229,18 @@ const ROTATED_LABEL_NUDGE_X: Partial<Record<Zone, number>> = { C: -3 }
 // 現地で確かめた位置（G の右上・E の左上）に置く。微調整は dx・dy（右・下が正）で行う。
 const ROTATED_LABEL_BETWEEN: Partial<Record<Zone, { left: Zone; right: Zone; dx: number; dy: number }>> = {
   F: { left: "G", right: "E", dx: 0, dy: 0 },
+}
+
+// 回したときだけ、ほかのエリア名（of）の下に置くエリア名。右端を of にそろえる。
+// U は現地で確かめた位置（V の下）に置く。微調整は dx・dy（右・下が正）で行う。
+const ROTATED_LABEL_BELOW: Partial<Record<Zone, { of: Zone; dx: number; dy: number }>> = {
+  U: { of: "V", dx: 0, dy: 0 },
+}
+
+// 回したときだけ、枠の指定した隅に置くエリア名（いまは左下だけ）。
+// W は現地で確かめた位置（W の枠の左下の隅）に置く。微調整は dx・dy（右・下が正）で行う。
+const ROTATED_LABEL_CORNER: Partial<Record<Zone, { corner: "bottom-left"; dx: number; dy: number }>> = {
+  W: { corner: "bottom-left", dx: 0, dy: 0 },
 }
 
 // ─── 種別カラー ─────────────────────────────────────────────────────────────────
@@ -831,24 +875,27 @@ export default function HerbGardenFloorMap() {
             const f = zone === "T" ? insetContent : toShownRect(rotRect(zoneFrame(zone)))
             let x: number
             let y: number
+            let anchor: "start" | "end"
             if (ROTATE_FLOOR_MAP_180) {
               const a =
                 zone === "T"
                   ? rotatedLabelAnchor(zone, () => insetContent)
                   : rotatedLabelAnchor(zone, (z) => rotRect(zoneFrame(z)))
-              x = a.right
+              x = a.x
               y = a.baseline
+              anchor = a.anchor
             } else {
               // 回さないときは元の置き方（左上、G・Q は左下）
               x = f.x + LABEL_INSET
               y = LABEL_AT_BOTTOM.has(zone) ? f.y + f.h - LABEL_INSET : f.y + LABEL_TOP_BASELINE
+              anchor = "start"
             }
             return (
               <text
                 key={zone}
                 x={x}
                 y={y}
-                textAnchor={ROTATE_FLOOR_MAP_180 ? "end" : "start"}
+                textAnchor={anchor}
                 fontSize={LABEL_FONT_SIZE}
                 fontWeight={700}
                 fill="#0F6E56"
