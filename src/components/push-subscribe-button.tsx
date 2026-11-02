@@ -128,12 +128,8 @@ export default function PushSubscribeButton() {
           </button>
         </div>
         {showAddToHomeScreenModal && (
-          <AddToHomeScreenModal
-            platform="ios"
-            title="ホーム画面に追加してください"
-            description="iPhoneでプッシュ通知を受け取るには、ホーム画面に追加してアイコンから開き直し、再度ログインすると通知を許可できるようになります。"
-            onClose={() => setShowAddToHomeScreenModal(false)}
-          />
+          // 見出しと本文はモーダルの iPhone 向けの既定（通知のことにも触れている）を使う
+          <AddToHomeScreenModal platform="ios" onClose={() => setShowAddToHomeScreenModal(false)} />
         )}
       </>
     );
