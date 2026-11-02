@@ -280,9 +280,9 @@ const TYPE_LABELS: Record<string, string> = {
 // 残ってしまい解除できない（iOS Safariはアクセシビリティのためmaximum-scale/
 // user-scalable指定を無視するためJSからの解除が不可能）。そのためマップ自体に
 // transform: scaleでズーム・パンを実装し、ネイティブズームはtouch-action: noneで止める。
+// 使うのは全画面の地図だけ。カードの地図は拡大・移動せず、ページの縦スクロールを妨げない。
 
 const MIN_SCALE = 1
-const MAX_SCALE = 4 // カードの中の地図
 const FULL_MAX_SCALE = 8 // 全画面の地図（画面の幅に合わせた大きさからの倍率）
 // 全画面を開いたときの倍率。地図は横長なので、縦向きの画面で幅に合わせるだけでは
 // カードとほぼ同じ大きさにしかならない。地図の高さが画面の約4割になる倍率から始める
@@ -321,7 +321,7 @@ interface ZoomGesture {
 
 /**
  * 地図の拡大・移動（指で広げる・なぞる、ダブルタップ、Ctrl＋ホイール）。
- * カードの中の地図と全画面の地図で、それぞれ1つずつ使う。
+ * 全画面の地図で使う（カードの地図では使わない）。
  *
  * 地図は容器の幅いっぱいに描き、それを包む contentRef の要素に translate＋scale をかける。
  * 地図が容器より小さい向きは中央に置き、大きい向きは端が容器の内側に入りすぎないよう止める。
@@ -508,7 +508,8 @@ function useMapZoom(maxScale: number, suppressClickRef: RefObject<boolean>) {
 export default function HerbGardenFloorMap() {
   const router = useRouter()
   const suppressClickRef = useRef(false)
-  const card = useMapZoom(MAX_SCALE, suppressClickRef)
+  // 拡大・移動は全画面の地図だけ。カードの中では見える範囲が増えないうえ、
+  // 指の動きを止めるとページを縦にスクロールできなくなるため、カードには付けない
   const full = useMapZoom(FULL_MAX_SCALE, suppressClickRef)
   // 地図だけを画面いっぱいに出しているか
   const [fullOpen, setFullOpen] = useState(false)
@@ -1003,25 +1004,22 @@ export default function HerbGardenFloorMap() {
 
   return (
     <div className="space-y-2">
-      {/* マップSVG（アプリ内ズーム・パン対応） */}
+      {/* マップSVG（カードの中。拡大・移動はせず、ページの縦スクロールを妨げない） */}
       <div
-        ref={card.containerRef}
         className="relative bg-white rounded-xl overflow-hidden border border-gray-100 select-none"
-        style={{ touchAction: "none" }}
-        {...card.handlers}
+        // 全画面で指を動かしたあとに閉じると「タップを無視する」印が残ることがあるので、
+        // カードに指を置いたら下ろしておく（エリアのタップが無視されないように）
+        onPointerDown={() => {
+          suppressClickRef.current = false
+        }}
       >
-        <div className="absolute top-2 right-2 z-10 flex gap-1.5">
-          {card.transform.scale > MIN_SCALE && (
-            <button onClick={card.fitAll} className={mapButtonClass}>
-              全体表示に戻す
-            </button>
-          )}
-          {/* 地図だけを画面いっぱいに出す。カードの中では大きくしても見える範囲が増えないため */}
+        <div className="absolute top-2 right-2 z-10">
+          {/* 地図だけを画面いっぱいに出す。拡大・移動はそちらで行う */}
           <button onClick={() => setFullOpen(true)} className={mapButtonClass}>
             拡大
           </button>
         </div>
-        {zoomedMap(card)}
+        {mapSvg}
       </div>
 
       {/* 全画面の地図。カードの地図はそのまま残し、上に重ねて出す */}
