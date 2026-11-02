@@ -143,10 +143,35 @@ function segmentHitsRect(p: Point, q: Point, r: Rect): boolean {
 }
 
 // エリア名の文字の範囲（回したあとの地図での置き方。描画の規則と同じ）
-function rotatedLabelBox(zone: Zone, f: Rect): Rect {
+// エリア名の文字のおおよその幅と、ベースラインから文字の上端まで（大きさ28の大文字）
+const LABEL_W = 20
+const LABEL_CAP = 20
+
+/**
+ * 回したときのエリア名の置き場所（右寄せの右端 x とベースライン y）。
+ * 既定は枠の右下（G・Q は右上）。ROTATED_LABEL_BETWEEN にあるエリアは、
+ * 指定した2つのエリア名のあいだの上に置く。frameOf は回したあとの枠を返す。
+ */
+function rotatedLabelAnchor(zone: Zone, frameOf: (z: Zone) => Rect): { right: number; baseline: number } {
+  const between = ROTATED_LABEL_BETWEEN[zone]
+  if (between) {
+    const l = rotatedLabelAnchor(between.left, frameOf)
+    const r = rotatedLabelAnchor(between.right, frameOf)
+    // 左の名前の右端と、右の名前の左端のまんなかに、文字の中心を置く
+    const center = (l.right + (r.right - LABEL_W)) / 2 + between.dx
+    // 2つの名前の上端より少し上に、ベースラインを置く
+    const baseline = Math.min(l.baseline, r.baseline) - LABEL_CAP - 4 + between.dy
+    return { right: center + LABEL_W / 2, baseline }
+  }
+  const f = frameOf(zone)
   const atBottom = !LABEL_AT_BOTTOM.has(zone)
   const baseline = atBottom ? f.y + f.h - LABEL_INSET : f.y + LABEL_TOP_BASELINE
   const right = f.x + f.w - LABEL_INSET + (ROTATED_LABEL_NUDGE_X[zone] ?? 0)
+  return { right, baseline }
+}
+
+function rotatedLabelBox(zone: Zone, frameOf: (z: Zone) => Rect): Rect {
+  const { right, baseline } = rotatedLabelAnchor(zone, frameOf)
   return { x: right - 22, y: baseline - 22, w: 22, h: 24 }
 }
 
@@ -166,6 +191,13 @@ const LABEL_AT_BOTTOM: ReadonlySet<Zone> = new Set<Zone>(["G", "Q"])
 // 回したときだけ、横にずらすエリア名（負は左）。C と D は文字のあいだが約1しかなく、
 // 地図の表示倍率によって文字幅の測れ方が変わると触れてしまうため、C を少し離す。
 const ROTATED_LABEL_NUDGE_X: Partial<Record<Zone, number>> = { C: -3 }
+
+// 回したときだけ、ほかの2つのエリア名（left・right）のあいだの上に置くエリア名。
+// F は枠が横に広く、既定の「枠の右下」だと植物の集まりから右下へ離れてしまうため、
+// 現地で確かめた位置（G の右上・E の左上）に置く。微調整は dx・dy（右・下が正）で行う。
+const ROTATED_LABEL_BETWEEN: Partial<Record<Zone, { left: Zone; right: Zone; dx: number; dy: number }>> = {
+  F: { left: "G", right: "E", dx: 0, dy: 0 },
+}
 
 // ─── 種別カラー ─────────────────────────────────────────────────────────────────
 
@@ -545,9 +577,9 @@ export default function HerbGardenFloorMap() {
   // ── 回したあとの地図での配置（手がかり・引き出し図）──────────────────────
   // 当たり判定に使う、T 以外のエリアの枠・点・エリア名（回したあとの座標）
   const mainZones = ZONES.filter((zone) => zone !== "T")
-  const rotFrames = new Map(mainZones.map((zone) => [zone, rotRect(zoneFrame(zone))] as const))
+  const rotFrames = new Map<Zone, Rect>(mainZones.map((zone) => [zone, rotRect(zoneFrame(zone))]))
   const obstacleFrames = [...rotFrames.values()]
-  const obstacleLabels = mainZones.map((zone) => rotatedLabelBox(zone, rotFrames.get(zone)!))
+  const obstacleLabels = mainZones.map((zone) => rotatedLabelBox(zone, (z) => rotFrames.get(z)!))
   const obstacleDots = plots
     .filter((plot) => plot.zone !== "T")
     .map((plot) => {
@@ -797,19 +829,24 @@ export default function HerbGardenFloorMap() {
               T は引き出し図の中の枠を基準にする */}
           {ZONES.map((zone) => {
             const f = zone === "T" ? insetContent : toShownRect(rotRect(zoneFrame(zone)))
-            // 回すと上下・左右が入れ替わる
-            const atBottom = LABEL_AT_BOTTOM.has(zone) !== ROTATE_FLOOR_MAP_180
-            const y = atBottom
-              ? f.y + f.h - LABEL_INSET
-              : f.y + LABEL_TOP_BASELINE
+            let x: number
+            let y: number
+            if (ROTATE_FLOOR_MAP_180) {
+              const a =
+                zone === "T"
+                  ? rotatedLabelAnchor(zone, () => insetContent)
+                  : rotatedLabelAnchor(zone, (z) => rotRect(zoneFrame(z)))
+              x = a.right
+              y = a.baseline
+            } else {
+              // 回さないときは元の置き方（左上、G・Q は左下）
+              x = f.x + LABEL_INSET
+              y = LABEL_AT_BOTTOM.has(zone) ? f.y + f.h - LABEL_INSET : f.y + LABEL_TOP_BASELINE
+            }
             return (
               <text
                 key={zone}
-                x={
-                  ROTATE_FLOOR_MAP_180
-                    ? f.x + f.w - LABEL_INSET + (ROTATED_LABEL_NUDGE_X[zone] ?? 0)
-                    : f.x + LABEL_INSET
-                }
+                x={x}
                 y={y}
                 textAnchor={ROTATE_FLOOR_MAP_180 ? "end" : "start"}
                 fontSize={LABEL_FONT_SIZE}
