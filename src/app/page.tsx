@@ -55,6 +55,8 @@ function bloomMonthsFromText(text: string | null | undefined): Set<number> {
   return months
 }
 
+const AREAS = "ABCDEFGHIJKLMNOPQRSTUVW".split("")
+
 export default function HomePage() {
   const [plants, setPlants] = useState<Plant[]>([])
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
@@ -144,6 +146,14 @@ export default function HomePage() {
     // 同じ名前の植物（エリア違いの株）は、並べ替えでいちばん上に来た1件だけを残す
     .filter((p, i, list) => list.findIndex((q) => q.name === p.name) === i)
     .slice(0, 8)
+
+  const areaCounts = plants.reduce(
+    (acc, p) => {
+      acc[p.area] = (acc[p.area] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>
+  )
 
   const filteredPlants = searchQuery
     ? plants.filter(
@@ -321,7 +331,7 @@ export default function HomePage() {
               カードのどこをタップしても全画面が開き、エリアは全画面の中で選ぶ */}
           <section className="px-4 mt-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold">園内図</h2>
+              <h2 className="text-base font-bold">園内マップ</h2>
               <Link
                 href="/areas"
                 className="text-xs text-herb-primary font-medium flex items-center gap-0.5"
@@ -332,6 +342,29 @@ export default function HomePage() {
             </div>
             <div className="bg-white rounded-2xl p-2 shadow-sm">
               <HerbGardenFloorMap variant="home" />
+            </div>
+          </section>
+
+          {/* エリア一覧（A〜W のマス目・件数つき）。311b5ad までの「エリアマップ」をそのまま戻した。
+              /areas への「すべて見る」は、すぐ上の園内マップの見出しにだけ付ける
+              （同じ入口が2つ並ばないように。マス目は各エリアの詳細へ直接進む） */}
+          <section className="px-4 mt-6">
+            <h2 className="text-base font-bold mb-3">エリア一覧</h2>
+            <div className="grid grid-cols-5 gap-2">
+              {AREAS.map((area) => (
+                <Link
+                  key={area}
+                  href={`/areas/${area}`}
+                  className={`area-${area.toLowerCase()} rounded-xl p-2.5 text-center card-hover shadow-sm`}
+                >
+                  <span className="text-lg font-bold text-herb-text">
+                    {area}
+                  </span>
+                  <p className="text-[10px] text-herb-text-secondary mt-0.5">
+                    {areaCounts[area] || 0}種
+                  </p>
+                </Link>
+              ))}
             </div>
           </section>
 
