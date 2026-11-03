@@ -22,6 +22,16 @@ const ORDERS = {
 type OrderKey = keyof typeof ORDERS
 
 /**
+ * 返す列。画面が実際に使っている列だけを、許可する形で並べる。
+ * select("*") や「〇〇を除く」の書き方にはしないこと。plants に列が増えたとき
+ * （例：職員の表示名が入る updated_by）、何も書き換えていないのに来園者へ漏れる。
+ * is_planted・created_at は絞り込みと並び順にだけ使う。select に含めなくても効く。
+ * 列を足すときは types/database.ts の Plant も同じように直す。
+ */
+const PLANT_COLUMNS =
+  "id, name, area, plant_no, category, feature_flower, feature_leaf, scent, herb_use, caution, care_point"
+
+/**
  * 植物マスタ（来園者アプリ用・読み取りのみ）。
  * plants は RLS で anon を遮断しているため、画面からは必ずこの API を経由する。
  * 来園者アプリから plants への書き込みは無いので、GET だけを定義する。
@@ -57,7 +67,7 @@ export async function GET(request: NextRequest) {
   if (id) {
     const { data, error } = await supabase
       .from("plants")
-      .select("*")
+      .select(PLANT_COLUMNS)
       .eq("id", id)
       .maybeSingle()
     if (error) {
@@ -70,7 +80,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ plant: data as Plant })
   }
 
-  let query = supabase.from("plants").select("*")
+  let query = supabase.from("plants").select(PLANT_COLUMNS)
   if (area) query = query.eq("area", area)
   if (planted) query = query.eq("is_planted", true)
   if (orderParam) {

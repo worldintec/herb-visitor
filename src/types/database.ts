@@ -1,14 +1,16 @@
+// /api/map-plots が返す形（MAP_PLOT_COLUMNS と同じ列）。テーブルには note・created_at もあるが返さない。
 export interface MapPlot {
   id: string
   zone: string
   name: string
   type: 'herb' | 'flower' | 'vegetable' | 'tree' | 'other'
-  note: string | null
   x: number
   y: number
-  created_at: string
 }
 
+// /api/plants が返す形（PLANT_COLUMNS と同じ列）。テーブルには is_planted・created_at、
+// 職員の編集記録（updated_at・updated_by）もあるが返さない。ここにも足さないこと。
+// 型に無ければ、画面で使おうとした時点で型チェックが止まる。
 export interface Plant {
   id: string
   name: string
@@ -21,8 +23,6 @@ export interface Plant {
   herb_use: string | null
   caution: string | null
   care_point: string | null
-  is_planted: boolean
-  created_at: string
 }
 
 // /api/plant-photos が返す形。テーブルには uploaded_by・uploaded_at もあるが返さない。

@@ -6,6 +6,13 @@ import type { MapPlot } from "@/types/database"
 export const dynamic = "force-dynamic"
 
 /**
+ * 返す列。全体マップが使っている列だけを、許可する形で並べる（select("*") は使わない）。
+ * 並び順の created_at は select に含めなくても効く。
+ * 列を足すときは types/database.ts の MapPlot も同じように直す。
+ */
+const MAP_PLOT_COLUMNS = "id, zone, name, type, x, y"
+
+/**
  * マップ上のプロット（来園者アプリ用・読み取りのみ）。
  * map_plots は RLS で anon を遮断するため、画面からは必ずこの API を経由する。
  *
@@ -21,7 +28,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from("map_plots")
-    .select("*")
+    .select(MAP_PLOT_COLUMNS)
     .order("created_at")
 
   if (error) {
