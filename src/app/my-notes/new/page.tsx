@@ -12,6 +12,7 @@ import {
   Loader2,
   Leaf,
   Search,
+  Star,
 } from "lucide-react"
 import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import { getSessionId } from "@/lib/session"
@@ -19,7 +20,7 @@ import { fetchCurrentUser } from "@/lib/current-user"
 import type { Plant, VisitorNote } from "@/types/database"
 import imageCompression from "browser-image-compression"
 import { uploadPhotos, describeFailures } from "@/lib/photo-upload"
-import { getNotePhotoUrl } from "@/lib/note-photo"
+import { getNotePhotoUrl, getNotePhotoItemUrl } from "@/lib/note-photo"
 import MessageBanner, { BANNER_POSITION, type BannerMessage } from "@/components/message-banner"
 
 // 保存に失敗したときに画面に出す文言。詳細（サーバーの返したエラーや例外）は console.error にだけ出す。
@@ -27,6 +28,16 @@ import MessageBanner, { BANNER_POSITION, type BannerMessage } from "@/components
 const SAVE_NETWORK_ERROR = "保存に失敗しました。電波の状態をご確認のうえ、もう一度お試しください。"
 // サーバーがエラーを返したときは電波の問題ではないので、案内を分ける。
 const SAVE_SERVER_ERROR = "保存に失敗しました。時間を置いて、もう一度お試しください。"
+
+// 1件のノートに付けられる写真の枚数（サーバーの MAX_NOTE_PHOTOS と同じ。サーバーでも検査する）
+const MAX_PHOTOS = 3
+
+// 写真の欄に並べる1枚。先頭が代表（一覧のサムネイルに出る）。
+//   existing … 保存済みの写真。path は保存のときにそのまま送り返す
+//   new      … これから送る写真。保存を押したときに圧縮して送る
+type PhotoItem =
+  | { key: string; kind: "existing"; path: string; url: string }
+  | { key: string; kind: "new"; file: File; url: string }
 
 // 日本時間の今日（YYYY-MM-DD）。sv-SE の書式が YYYY-MM-DD になる
 function todayInJapan(): string {
@@ -67,11 +78,11 @@ function NewNoteContent() {
   const [noteText, setNoteText] = useState("")
   // 初期値は日本時間の今日。toISOString() は UTC の日付なので、朝9時より前だと前日になっていた
   const [visitDate, setVisitDate] = useState(todayInJapan)
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
-  const [existingPhotoPath, setExistingPhotoPath] = useState<string | null>(
-    null
-  )
+  // 写真（最大3枚・先頭が代表）
+  const [photos, setPhotos] = useState<PhotoItem[]>([])
+  // 保存中の写真の送信の進み具合（何枚目を送っているか）
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -81,8 +92,8 @@ function NewNoteContent() {
   const [message, setMessage] = useState<BannerMessage | null>(null)
   // 保存できたあとに「保存」を押させないためのフラグ（同じメモが2件できるのを防ぐ）
   const [saved, setSaved] = useState(false)
-  // プレビュー用に作った blob URL。差し替え時と後片付けで revoke する。
-  const previewUrlRef = useRef<string | null>(null)
+  // プレビュー用に作った blob URL。写真を外したときと後片付けで revoke する。
+  const previewUrlsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     async function init() {
@@ -119,11 +130,17 @@ function NewNoteContent() {
           setSelectedPlantName(note.plant_name || "")
           setNoteText(note.note_text)
           setVisitDate(note.visit_date)
-          if (note.photo_path) {
-            setExistingPhotoPath(note.photo_path)
-            // 既存の写真はノートのIDで引く（パスからURLは組み立てられない）
-            setPhotoPreview(getNotePhotoUrl(editId))
-          }
+          // 既存の写真はノートと写真のIDで引く（パスからURLは組み立てられない）。
+          // 移行前のノート（写真の行が無い）は id が null で、代表の写真のURLで引く
+          const notePhotos = (note.photos ?? []) as { id: string | null; path: string }[]
+          setPhotos(
+            notePhotos.map((p, i) => ({
+              key: `existing-${p.id ?? i}`,
+              kind: "existing" as const,
+              path: p.path,
+              url: p.id ? getNotePhotoItemUrl(editId, p.id) : getNotePhotoUrl(editId),
+            }))
+          )
         }
       }
 
@@ -145,52 +162,73 @@ function NewNoteContent() {
     setShowPlantDropdown(false)
   }
 
-  function releasePreviewUrl() {
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current)
-      previewUrlRef.current = null
+  function releasePreviewUrl(url: string) {
+    if (previewUrlsRef.current.has(url)) {
+      URL.revokeObjectURL(url)
+      previewUrlsRef.current.delete(url)
     }
   }
 
   // プレビュー用に作った blob URL を、画面を離れるときに解放する
   useEffect(() => {
+    const urls = previewUrlsRef.current
     return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+      urls.forEach((url) => URL.revokeObjectURL(url))
+      urls.clear()
     }
   }, [])
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const selected = Array.from(e.target.files ?? [])
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    if (selected.length === 0) return
+
+    const room = MAX_PHOTOS - photos.length
+    const files = selected.slice(0, Math.max(room, 0))
+    setPhotoNotice(
+      selected.length > files.length
+        ? `写真は${MAX_PHOTOS}枚までです。はじめの${files.length}枚だけを追加しました。`
+        : null
+    )
+    if (files.length === 0) return
 
     // アップロード時の圧縮は lib/photo-upload.ts が行うので、ここでは元ファイルを持つ。
-    // 以前はここで圧縮したものを保存していたため、共通化すると二重圧縮になっていた。
-    setPhotoFile(file)
-
     // プレビューは軽い方がよいので、圧縮できたらそれを使う（失敗したら元ファイル）
-    let previewSource: File | Blob = file
-    try {
-      previewSource = await imageCompression(file, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true,
-      })
-    } catch {
-      previewSource = file
+    const items: PhotoItem[] = []
+    for (const file of files) {
+      let previewSource: File | Blob = file
+      try {
+        previewSource = await imageCompression(file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1200,
+          useWebWorker: true,
+        })
+      } catch {
+        previewSource = file
+      }
+      const url = URL.createObjectURL(previewSource)
+      previewUrlsRef.current.add(url)
+      items.push({ key: `new-${url}`, kind: "new", file, url })
     }
-    releasePreviewUrl()
-    const url = URL.createObjectURL(previewSource)
-    previewUrlRef.current = url
-    setPhotoPreview(url)
+    setPhotos((prev) => [...prev, ...items].slice(0, MAX_PHOTOS))
   }
 
-  function removePhoto() {
-    releasePreviewUrl()
-    setPhotoFile(null)
-    setPhotoPreview(null)
-    setExistingPhotoPath(null)
+  function removePhoto(key: string) {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.key === key)
+      if (target?.kind === "new") releasePreviewUrl(target.url)
+      return prev.filter((p) => p.key !== key)
+    })
     setPhotoWarning(null)
-    if (fileInputRef.current) fileInputRef.current.value = ""
+    setPhotoNotice(null)
+  }
+
+  // 代表（先頭）にする。残りの並びはそのまま
+  function makeCover(key: string) {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.key === key)
+      return target ? [target, ...prev.filter((p) => p.key !== key)] : prev
+    })
   }
 
   async function handleSave() {
@@ -212,20 +250,24 @@ function NewNoteContent() {
     const sessionId = getSessionId()
 
     try {
-      let photoPath: string | null = existingPhotoPath
-      let photoDetail = ""
-
-      // Upload new photo（差し替え前の写真の削除はサーバー側で行う）
-      if (photoFile) {
-        // 保存先のパスはサーバーが決める（バケットも送信側が固定で持つ）
-        const { uploaded, failures } = await uploadPhotos([photoFile])
-        if (uploaded.length > 0) {
-          photoPath = uploaded[0].path
-        } else {
-          // 失敗したときは既存の写真のパスを消さない。差し替え前の写真をそのまま残す。
-          photoDetail = describeFailures(failures)
-        }
+      // 新しい写真を1枚ずつ送る（圧縮は lib/photo-upload.ts）。送れなかった写真は外し、
+      // 残りの写真とメモは保存する。送れた写真のパスを、画面の並びどおりに並べる
+      const newItems = photos.filter((p) => p.kind === "new")
+      const uploadedPath = new Map<string, string>()
+      const failures: Parameters<typeof describeFailures>[0] = []
+      for (let i = 0; i < newItems.length; i++) {
+        const item = newItems[i]
+        if (item.kind !== "new") continue
+        setUploadProgress({ done: i, total: newItems.length })
+        const result = await uploadPhotos([item.file])
+        if (result.uploaded.length > 0) uploadedPath.set(item.key, result.uploaded[0].path)
+        failures.push(...result.failures)
       }
+      setUploadProgress(null)
+      const photoPaths = photos
+        .map((p) => (p.kind === "existing" ? p.path : uploadedPath.get(p.key)))
+        .filter((path): path is string => !!path)
+      const photoDetail = failures.length > 0 ? describeFailures(failures) : ""
 
       // 保存はサーバー側（/api/visitor-notes）でセッション検証のうえ行う。
       // user_id はサーバーがセッションから決めるため送らない。
@@ -234,7 +276,8 @@ function NewNoteContent() {
         plantId: selectedPlantId || null,
         plantName: selectedPlantName || null,
         noteText: noteText.trim(),
-        photoPath,
+        // 並び順どおり（先頭が代表）。0〜3件
+        photoPaths,
         visitDate,
       }
 
@@ -254,7 +297,11 @@ function NewNoteContent() {
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: null }))
         console.error(`Save error: status=${res.status}`, error)
-        setMessage({ type: "error", text: SAVE_SERVER_ERROR })
+        // 400 は入力の問題（写真の枚数など）。サーバーの文言はそのまま見せられる
+        setMessage({
+          type: "error",
+          text: res.status === 400 && typeof error === "string" ? error : SAVE_SERVER_ERROR,
+        })
         setSaving(false)
         return
       }
@@ -263,7 +310,7 @@ function NewNoteContent() {
         // メモ本体は保存できている。遷移せずに警告を出すので、二重作成を防ぐため保存済みにする。
         setSaved(true)
         setPhotoWarning(
-          `メモは保存しましたが、写真は更新できませんでした：${photoDetail}`
+          `メモは保存しましたが、送れなかった写真があります：${photoDetail}`
         )
         setSaving(false)
         return
@@ -276,6 +323,7 @@ function NewNoteContent() {
       setMessage({ type: "error", text: SAVE_NETWORK_ERROR })
     } finally {
       setSaving(false)
+      setUploadProgress(null)
     }
   }
 
@@ -321,7 +369,11 @@ function NewNoteContent() {
             ) : (
               <Save size={14} />
             )}
-            保存
+            {uploadProgress
+              ? `写真 ${uploadProgress.done + 1}/${uploadProgress.total}`
+              : saving
+                ? "保存中"
+                : "保存"}
           </button>
         )}
       </div>
@@ -440,47 +492,98 @@ function NewNoteContent() {
 
         {/* Photo upload */}
         <div>
-          <label className="text-sm font-semibold mb-2 block">写真</label>
-          {photoPreview ? (
-            // 写真は切り取らずに全体を出す（一覧のサムネイルは切り取ったまま）。
-            // 枠の幅はそのままで、高さは写真に合わせる。縦長の写真は画面の高さの6割で止め、
-            // 左右の余白には枠の背景色が見える。× は写真の右上に置くため、写真だけを包む
-            // 内側の箱（relative）に入れている。
-            <div className="rounded-2xl overflow-hidden bg-green-50 border border-herb-border flex justify-center">
-              <div className="relative min-w-0 max-w-full">
-                <Image
-                  src={photoPreview}
-                  alt="プレビュー"
-                  width={400}
-                  height={300}
-                  className="block w-auto h-auto max-w-full max-h-[60dvh]"
-                  // 既存の写真を出すときは /api/visitor-notes/[id]/photo になる。
-                  // 画像最適化を通すとクッキーが送られず 401 になり、さらに
-                  // /_next/image に公開でキャッシュされてしまう。
-                  // 撮りたての写真は blob URL で、こちらは元から最適化されない。
-                  unoptimized
-                />
-                <button
-                  onClick={removePhoto}
-                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-32 rounded-2xl border-2 border-dashed border-herb-border bg-white flex flex-col items-center justify-center gap-2 text-herb-text-secondary active:bg-green-50 transition-colors"
-            >
-              <Camera size={24} />
-              <span className="text-sm">写真を追加</span>
-            </button>
+          <div className="flex items-baseline justify-between mb-2">
+            <label className="text-sm font-semibold">写真</label>
+            <span className="text-xs text-herb-text-secondary">
+              {photos.length} / {MAX_PHOTOS}枚（{MAX_PHOTOS}枚まで）
+            </span>
+          </div>
+          {uploadProgress && (
+            <p className="text-xs text-herb-primary font-medium mb-2" aria-live="polite">
+              写真を送っています（{uploadProgress.done + 1}/{uploadProgress.total}枚目）…
+            </p>
           )}
+          <div className="space-y-3">
+            {photos.map((photo, index) => (
+              // 写真は切り取らずに全体を出す（一覧のサムネイルは切り取ったまま）。
+              // 枠の幅はそのままで、高さは写真に合わせる。縦長の写真は画面の高さの6割で止め、
+              // 左右の余白には枠の背景色が見える。× は写真の右上に置くため、写真だけを包む
+              // 内側の箱（relative）に入れている。
+              <div key={photo.key}>
+                <div className="rounded-2xl overflow-hidden bg-green-50 border border-herb-border flex justify-center">
+                  <div className="relative min-w-0 max-w-full">
+                    <Image
+                      src={photo.url}
+                      alt={index === 0 ? "代表の写真" : `写真${index + 1}`}
+                      width={400}
+                      height={300}
+                      className="block w-auto h-auto max-w-full max-h-[60dvh]"
+                      // 既存の写真を出すときは /api/visitor-notes/[id]/photo(s) になる。
+                      // 画像最適化を通すとクッキーが送られず 401 になり、さらに
+                      // /_next/image に公開でキャッシュされてしまう。
+                      // 撮りたての写真は blob URL で、こちらは元から最適化されない。
+                      unoptimized
+                    />
+                    <button
+                      onClick={() => removePhoto(photo.key)}
+                      disabled={saving}
+                      aria-label={`写真${index + 1}を外す`}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white disabled:opacity-50"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  {index === 0 ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-herb-primary">
+                      <Star size={12} className="fill-current" />
+                      代表（一覧に出る写真）
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => makeCover(photo.key)}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-herb-primary border border-herb-primary/40 rounded-lg px-2.5 h-8 active:bg-green-50 disabled:opacity-50"
+                    >
+                      <Star size={12} />
+                      代表にする
+                    </button>
+                  )}
+                  <span className="text-xs text-herb-text-secondary">{index + 1}枚目</span>
+                </div>
+              </div>
+            ))}
+
+            {photos.length < MAX_PHOTOS ? (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={saving}
+                className={`w-full ${photos.length === 0 ? "h-32" : "h-20"} rounded-2xl border-2 border-dashed border-herb-border bg-white flex flex-col items-center justify-center gap-1.5 text-herb-text-secondary active:bg-green-50 transition-colors disabled:opacity-50`}
+              >
+                <Camera size={22} />
+                <span className="text-sm">
+                  写真を追加（あと{MAX_PHOTOS - photos.length}枚）
+                </span>
+              </button>
+            ) : (
+              <button
+                disabled
+                className="w-full h-14 rounded-2xl border-2 border-dashed border-herb-border bg-gray-50 flex items-center justify-center gap-1.5 text-herb-text-secondary/70 text-sm"
+              >
+                <Camera size={18} />
+                写真は{MAX_PHOTOS}枚までです
+              </button>
+            )}
+            {photoNotice && (
+              <p className="text-xs text-amber-700" role="status">{photoNotice}</p>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handlePhotoChange}
             className="hidden"
           />

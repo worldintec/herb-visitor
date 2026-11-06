@@ -196,7 +196,7 @@ export default function MyNotesPage() {
                 key={note.id}
                 className="bg-white rounded-2xl overflow-hidden shadow-sm"
               >
-                {note.photo_path && (
+                {(note.photo_path || (note.photo_count ?? 0) > 0) && (
                   <div className="aspect-[16/9] relative">
                     <Image
                       src={getNotePhotoUrl(note.id)}

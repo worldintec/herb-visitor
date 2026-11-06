@@ -3,10 +3,16 @@ import { getSession } from "@/lib/auth"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 import {
   NOTES_TABLE,
-  NOTES_BUCKET,
   NOTE_COLUMNS,
   parseNotePayload,
 } from "@/lib/visitor-notes"
+import {
+  checkNewPhotoPaths,
+  fetchPhotoRows,
+  photosOf,
+  removeNotePhotoFiles,
+  syncNotePhotos,
+} from "@/lib/visitor-note-photos"
 
 export const dynamic = "force-dynamic"
 
@@ -38,7 +44,15 @@ export async function GET(
     return NextResponse.json({ error: "ノートが見つかりません" }, { status: 404 })
   }
 
-  return NextResponse.json({ note: data })
+  // 写真は並び順どおり（先頭が代表）。path は保存のときにそのまま送り返してもらう
+  const note = data as { id: string; photo_path: string | null }
+  const { rows, error: photoError } = await fetchPhotoRows(supabase, [note.id])
+  if (photoError) {
+    console.error("visitor_note_photos select error:", photoError)
+    return NextResponse.json({ error: "ノートの取得に失敗しました" }, { status: 500 })
+  }
+
+  return NextResponse.json({ note: { ...note, photos: photosOf(rows.get(note.id), note.photo_path) } })
 }
 
 // PATCH /api/visitor-notes/[id] — 編集
@@ -67,7 +81,8 @@ export async function PATCH(
 
   const supabase = getSupabaseAdmin()
 
-  // 更新前の写真パスを控えておき、差し替え・削除された場合に実体を消す
+  // 持ち主を確かめ、更新前の写真を控えておく（外した写真の実体を消すため）。
+  // 他人のノートは「存在しない」として 404 にする
   const { data: existing } = await supabase
     .from(NOTES_TABLE)
     .select("photo_path")
@@ -77,6 +92,19 @@ export async function PATCH(
 
   if (!existing) {
     return NextResponse.json({ error: "ノートが見つかりません" }, { status: 404 })
+  }
+  const { rows, error: photoError } = await fetchPhotoRows(supabase, [id])
+  if (photoError) {
+    console.error("visitor_note_photos select error:", photoError)
+    return NextResponse.json({ error: "ノートの更新に失敗しました" }, { status: 500 })
+  }
+  const currentPhotos = photosOf(rows.get(id), existing.photo_path as string | null)
+
+  // ノートを書き換える前に、新しい写真のパスがほかのノートで使われていないかを確かめる
+  const checked = await checkNewPhotoPaths(supabase, session.userId, id, currentPhotos, parsed.photoPaths)
+  if (!checked.ok) {
+    if (checked.detail) console.error("visitor_note_photos check error:", checked.detail)
+    return NextResponse.json({ error: checked.error }, { status: checked.status })
   }
 
   const { data, error } = await supabase
@@ -92,16 +120,16 @@ export async function PATCH(
     return NextResponse.json({ error: "ノートの更新に失敗しました" }, { status: 500 })
   }
 
-  const oldPath = existing.photo_path as string | null
-  if (oldPath && oldPath !== parsed.value.photo_path) {
-    // 実体の削除に失敗してもノートの更新自体は成功として扱う
-    const { error: removeError } = await supabase.storage
-      .from(NOTES_BUCKET)
-      .remove([oldPath])
-    if (removeError) {
-      console.error("visitor-notes storage remove error:", removeError)
-    }
+  // 写真の行を、届いた並びにそろえる。失敗したら実体は消さない（写真を失わない側に倒す）
+  const synced = await syncNotePhotos(supabase, id, currentPhotos, parsed.photoPaths)
+  if (!synced.ok) {
+    console.error("visitor_note_photos sync error:", synced.detail ?? synced.error)
+    return NextResponse.json({ error: synced.error }, { status: synced.status })
   }
+
+  // 外した写真の実体を消す。パスは更新前のデータベースの行から読んだもの。
+  // 実体の削除に失敗してもノートの更新自体は成功として扱う
+  await removeNotePhotoFiles(supabase, synced.removedPaths)
 
   return NextResponse.json({ note: data })
 }
@@ -130,6 +158,17 @@ export async function DELETE(
     return NextResponse.json({ error: "ノートが見つかりません" }, { status: 404 })
   }
 
+  // 消す前に、写真の行のパスを集めておく（行は ON DELETE CASCADE で消えるが、実体は残るため）
+  const { rows, error: photoError } = await fetchPhotoRows(supabase, [id])
+  if (photoError) {
+    console.error("visitor_note_photos select error:", photoError)
+    return NextResponse.json({ error: "ノートの削除に失敗しました" }, { status: 500 })
+  }
+  const photoPaths = [
+    ...(rows.get(id) ?? []).map((r) => r.storage_path),
+    existing.photo_path as string | null,
+  ]
+
   const { error } = await supabase
     .from(NOTES_TABLE)
     .delete()
@@ -141,15 +180,8 @@ export async function DELETE(
     return NextResponse.json({ error: "ノートの削除に失敗しました" }, { status: 500 })
   }
 
-  const photoPath = existing.photo_path as string | null
-  if (photoPath) {
-    const { error: removeError } = await supabase.storage
-      .from(NOTES_BUCKET)
-      .remove([photoPath])
-    if (removeError) {
-      console.error("visitor-notes storage remove error:", removeError)
-    }
-  }
+  // photo_path と写真の行には同じパス（代表）が入っているので、重複を除いてから消す
+  await removeNotePhotoFiles(supabase, photoPaths)
 
   return NextResponse.json({ success: true })
 }

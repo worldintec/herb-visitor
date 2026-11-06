@@ -25,9 +25,12 @@ export default function MyPageWithdrawPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (!json?.notes) return
-        const notes = json.notes as { photo_path: string | null }[]
+        const notes = json.notes as { photo_path: string | null; photo_count?: number }[]
         setNoteCount(notes.length)
-        setPhotoCount(notes.filter((n) => n.photo_path).length)
+        // 1件に写真が最大3枚付くので、ノートごとの枚数（photo_count）を足す
+        setPhotoCount(
+          notes.reduce((sum, n) => sum + (n.photo_count ?? (n.photo_path ? 1 : 0)), 0)
+        )
       })
       .catch(() => {})
   }, [])

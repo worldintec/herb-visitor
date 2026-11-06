@@ -57,7 +57,10 @@ export interface VisitorNote {
   plant_id: string | null
   plant_name: string | null
   note_text: string
+  /** 代表の写真のパス（visitor_note_photos の先頭と同じ。切り戻しのために書き続けている） */
   photo_path: string | null
+  /** 写真の枚数（GET /api/visitor-notes が添える） */
+  photo_count?: number
   visit_date: string
   created_at: string
   updated_at: string
