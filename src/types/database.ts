@@ -61,6 +61,8 @@ export interface VisitorNote {
   photo_path: string | null
   /** 写真の枚数（GET /api/visitor-notes が添える） */
   photo_count?: number
+  /** 写真の id（並び順どおり。先頭が代表。移行前の1枚は null）。GET /api/visitor-notes が添える */
+  photo_ids?: (string | null)[]
   visit_date: string
   created_at: string
   updated_at: string

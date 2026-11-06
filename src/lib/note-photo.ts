@@ -12,6 +12,11 @@ export function getNotePhotoUrl(noteId: string): string {
   return `/api/visitor-notes/${noteId}/photo`
 }
 
+/** ノートの写真をすべて、並び順どおりの URL にする（先頭が代表。移行前の1枚は代表の URL） */
+export function getNotePhotoUrls(noteId: string, photoIds: (string | null)[]): string[] {
+  return photoIds.map((id) => (id ? getNotePhotoItemUrl(noteId, id) : getNotePhotoUrl(noteId)))
+}
+
 /** ノートの写真1枚（ノートを開いたとき）。photoId は visitor_note_photos の id */
 export function getNotePhotoItemUrl(noteId: string, photoId: string): string {
   return `/api/visitor-notes/${noteId}/photos/${photoId}`

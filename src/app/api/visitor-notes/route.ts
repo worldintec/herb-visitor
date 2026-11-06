@@ -38,8 +38,13 @@ export async function GET() {
     return NextResponse.json({ error: "ノートの取得に失敗しました" }, { status: 500 })
   }
 
+  // 一覧の写真を開いたとき（重ねて見る画面）に使う写真の id。同じ1回の読み込みから作るので
+  // 問い合わせは増えない。Storage のパスは返さない。移行前の1枚（行が無い）は null
   return NextResponse.json({
-    notes: notes.map((n) => ({ ...n, photo_count: photosOf(rows.get(n.id), n.photo_path).length })),
+    notes: notes.map((n) => {
+      const photos = photosOf(rows.get(n.id), n.photo_path)
+      return { ...n, photo_count: photos.length, photo_ids: photos.map((p) => p.id) }
+    }),
   })
 }
 

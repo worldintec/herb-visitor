@@ -5,7 +5,8 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { toLogin } from "@/lib/login-redirect"
-import { getNotePhotoUrl } from "@/lib/note-photo"
+import { getNotePhotoUrl, getNotePhotoUrls } from "@/lib/note-photo"
+import NotePhotoViewer from "@/components/note-photo-viewer"
 import {
   BookOpen,
   Plus,
@@ -36,6 +37,9 @@ export default function MyNotesPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
   const [message, setMessage] = useState<BannerMessage | null>(null)
+  // 写真を重ねて見ているノート（読むだけ。編集画面には行かない）
+  const [viewing, setViewing] = useState<VisitorNote | null>(null)
+  const closeViewer = useCallback(() => setViewing(null), [])
   // 植物ページや編集画面から「戻る」で戻ったとき、元のスクロール位置へ
   useScrollRestore("my-notes", !loading)
 
@@ -197,7 +201,14 @@ export default function MyNotesPage() {
                 className="bg-white rounded-2xl overflow-hidden shadow-sm"
               >
                 {(note.photo_path || (note.photo_count ?? 0) > 0) && (
-                  <div className="aspect-[16/9] relative">
+                  // 写真の上だけは、タップでその場に写真を重ねて見る（1枚でも開く）。
+                  // 編集画面へは、これまでどおり右上の鉛筆から
+                  <button
+                    type="button"
+                    onClick={() => setViewing(note)}
+                    aria-label={`写真を見る（${Math.max(note.photo_count ?? 1, 1)}枚）`}
+                    className="block w-full aspect-[16/9] relative"
+                  >
                     <Image
                       src={getNotePhotoUrl(note.id)}
                       alt="ノートの写真"
@@ -210,7 +221,13 @@ export default function MyNotesPage() {
                       // 公開でキャッシュされてしまう。
                       unoptimized
                     />
-                  </div>
+                    {/* 残りの枚数の印（3枚なら「+2」）。1枚のときは出さない */}
+                    {(note.photo_count ?? 0) > 1 && (
+                      <span className="absolute bottom-2 right-2 rounded-full bg-black/60 text-white text-xs font-semibold px-2 py-0.5 pointer-events-none">
+                        +{(note.photo_count ?? 0) - 1}
+                      </span>
+                    )}
+                  </button>
                 )}
                 <div className="p-4">
                   <div className="flex items-start justify-between mb-2">
@@ -263,6 +280,16 @@ export default function MyNotesPage() {
           </div>
         )}
       </div>
+
+      {viewing && (
+        <NotePhotoViewer
+          urls={getNotePhotoUrls(
+            viewing.id,
+            viewing.photo_ids && viewing.photo_ids.length > 0 ? viewing.photo_ids : [null]
+          )}
+          onClose={closeViewer}
+        />
+      )}
     </div>
   )
 }
