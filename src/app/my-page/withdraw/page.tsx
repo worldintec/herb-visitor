@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, UserX, CheckCircle2 } from "lucide-react"
 import { toLogin } from "@/lib/login-redirect"
+import PasswordInput from "@/components/password-input"
 
 /** 退会後に表示する完了画面の文面。通知の解除に失敗したときだけ出す。 */
 const PUSH_LEFTOVER_MESSAGE =
@@ -192,8 +193,7 @@ export default function MyPageWithdrawPage() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               パスワード
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"

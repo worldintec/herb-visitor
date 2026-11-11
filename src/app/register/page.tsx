@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { UserPlus, ArrowLeft } from "lucide-react"
 import { TERMS_TEXT } from "@/lib/terms"
 import { safeRedirect } from "@/lib/safe-redirect"
+import PasswordInput from "@/components/password-input"
 
 export default function RegisterPage() {
   return (
@@ -108,8 +109,7 @@ function RegisterPageInner() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               パスワード（英数字8〜16文字）
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
@@ -124,8 +124,7 @@ function RegisterPageInner() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               パスワード（確認）
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               autoComplete="new-password"

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { KeyRound } from "lucide-react"
 import { toLogin } from "@/lib/login-redirect"
+import PasswordInput from "@/components/password-input"
 
 export default function ChangePasswordPage() {
   const [checking, setChecking] = useState(true)
@@ -81,9 +82,8 @@ export default function ChangePasswordPage() {
             <label htmlFor="current-password" className="block text-xs font-medium text-herb-text-secondary mb-1">
               いまのパスワード（職員から受け取った仮パスワード）
             </label>
-            <input
+            <PasswordInput
               id="current-password"
-              type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
@@ -96,8 +96,7 @@ export default function ChangePasswordPage() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               新しいパスワード（英数字8〜16文字）
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
@@ -113,8 +112,7 @@ export default function ChangePasswordPage() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               新しいパスワード（確認）
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={newPasswordConfirm}
               onChange={(e) => setNewPasswordConfirm(e.target.value)}
               autoComplete="new-password"

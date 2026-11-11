@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { LogIn } from "lucide-react"
 import { safeRedirect } from "@/lib/safe-redirect"
 import GardenRuleNotice from "@/components/garden-rule-notice"
+import PasswordInput from "@/components/password-input"
 
 // ========== 背景スライドショー ==========
 
@@ -182,8 +183,7 @@ function LoginPageInner() {
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               パスワード（英数字8〜16文字）
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
