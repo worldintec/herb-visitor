@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     const { data: user } = await supabase
       .from("users")
-      .select("id, user_id, password_hash, password_reset_required")
+      .select("id, user_id, password_hash, password_reset_required, session_epoch")
       .eq("user_id", userId)
       .maybeSingle()
 
@@ -47,7 +47,12 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .then(() => {}, () => {})
 
-    const token = await createSessionToken({ userId: user.id, userCode: user.user_id })
+    // 証にはいまの世代を入れる（パスワードの変更などで世代が進むと、この証は使えなくなる）
+    const token = await createSessionToken({
+      userId: user.id,
+      userCode: user.user_id,
+      epoch: user.session_epoch ?? 0,
+    })
     await setSessionCookie(token)
 
     return NextResponse.json({

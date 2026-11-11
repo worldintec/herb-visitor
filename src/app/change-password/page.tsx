@@ -6,6 +6,8 @@ import { toLogin } from "@/lib/login-redirect"
 
 export default function ChangePasswordPage() {
   const [checking, setChecking] = useState(true)
+  // いまのパスワード＝職員から受け取った仮パスワード（サーバーで照合する。B-1 #11）
+  const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -35,9 +37,13 @@ export default function ChangePasswordPage() {
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ currentPassword, newPassword }),
       })
-      const json = await res.json()
+      if (res.status === 401) {
+        toLogin()
+        return
+      }
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(json.error || "処理に失敗しました")
         setSubmitting(false)
@@ -71,6 +77,21 @@ export default function ChangePasswordPage() {
           onSubmit={handleSubmit}
           className="bg-white rounded-2xl p-5 shadow-sm space-y-4"
         >
+          <div>
+            <label htmlFor="current-password" className="block text-xs font-medium text-herb-text-secondary mb-1">
+              いまのパスワード（職員から受け取った仮パスワード）
+            </label>
+            <input
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              maxLength={64}
+              className="w-full h-10 rounded-lg border border-herb-border bg-white px-3 text-sm outline-none focus:border-herb-primary"
+            />
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-herb-text-secondary mb-1">
               新しいパスワード（英数字8〜16文字）
@@ -109,7 +130,7 @@ export default function ChangePasswordPage() {
 
           <button
             type="submit"
-            disabled={submitting || !pwValid || !matchValid}
+            disabled={submitting || !currentPassword || !pwValid || !matchValid}
             className="w-full h-11 rounded-full bg-herb-primary text-white font-semibold text-sm disabled:opacity-50"
           >
             {submitting ? "更新中..." : "パスワードを更新する"}

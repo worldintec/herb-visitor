@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifySessionToken } from "@/lib/auth"
+import { isSessionCurrent, verifySessionToken } from "@/lib/auth"
 
 // 認証不要のパス（前方一致）
 //
@@ -67,7 +67,9 @@ export async function proxy(request: NextRequest) {
 
   // セッション確認
   const token = request.cookies.get("session")?.value
-  const session = token ? await verifySessionToken(token) : null
+  const verified = token ? await verifySessionToken(token) : null
+  // 世代がデータベースと同じか（パスワードの変更・仮パスワードの発行・退会で切れる。B-1 #10）
+  const session = verified && (await isSessionCurrent(verified)) ? verified : null
 
   if (!session) {
     // 元のページをクエリごと引き継ぐ。これが無いと、QRコードから来た来園者が

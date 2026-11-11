@@ -13,7 +13,10 @@ export async function POST() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  // 退会した利用者のセッションを切るための確認。
+  // getSession() が、署名・期限に加えて世代（users.session_epoch）を確かめ済み。
+  // 世代が進んでいる（パスワードの変更など）・退会して行が無い場合は、ここに来る前に null になる。
+  //
+  // 以下は、退会した利用者のセッションを切るための、以前からの確認。
   // これを見ないと、開いたまま放置された端末が30日間表示され続ける
   // （useAutoLogout のハートビートが叩くのはこのルートで、401 以外では
   // ログイン画面へ送る分岐に入らない）。

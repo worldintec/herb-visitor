@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { randomInt } from "crypto"
 import { getStaffSession } from "@/lib/staff-auth"
+import { setUserPassword } from "@/lib/user-password"
+import { rememberSessionEpoch } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
 
@@ -49,14 +51,14 @@ export async function POST(request: NextRequest) {
     const tempPassword = generateTempPassword(9)
     const passwordHash = await bcrypt.hash(tempPassword, 10)
 
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({ password_hash: passwordHash, password_reset_required: true })
-      .eq("id", user.id)
-
-    if (updateError) {
+    // 書き換えと同時にログインの世代を進める。乗っ取られた方を職員が助けるとき、
+    // ほかの端末（乗っ取った側）のログインもここで切れる（B-1 #10）。0行なら成功を返さない（#12）
+    const result = await setUserPassword(user.id, passwordHash, true)
+    if (!result.ok) {
+      console.error(`[staff/issue-temp-password] 書き換えに失敗しました reason=${result.reason}`, result.detail)
       return NextResponse.json({ error: "仮パスワードの発行に失敗しました" }, { status: 500 })
     }
+    rememberSessionEpoch(user.id, result.epoch)
 
     await supabase.from("password_reset_logs").insert({
       target_user_id: user.id,

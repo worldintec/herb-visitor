@@ -28,18 +28,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "利用規約への同意が必要です" }, { status: 400 })
     }
 
-    // 既存ID重複チェック（同一パスワードの場合は別メッセージ）
+    // 既存ID重複チェック。
+    // 送られたパスワードが既存の利用者のものと一致するかどうかで文言を変えてはいけない
+    // （以前は変えていたため、ログインせずに他人のパスワードを試して当たりが分かる窓口になっていた）。
+    // パスワードの照合もしない。どちらの場合も同じ文言を返す。
     const { data: existing } = await supabase
       .from("users")
-      .select("id, password_hash")
+      .select("id")
       .eq("user_id", userId)
       .maybeSingle()
 
     if (existing) {
-      const samePassword = await bcrypt.compare(password, existing.password_hash)
-      if (samePassword) {
-        return NextResponse.json({ error: "このIDは使用できません" }, { status: 409 })
-      }
       return NextResponse.json({ error: "このIDは既に使用されています" }, { status: 409 })
     }
 
@@ -55,7 +54,7 @@ export async function POST(request: NextRequest) {
         tos_agreed_at: new Date().toISOString(),
         tos_version: TERMS_VERSION,
       })
-      .select("id, user_id")
+      .select("id, user_id, session_epoch")
       .single()
 
     if (error || !data) {
@@ -66,7 +65,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const token = await createSessionToken({ userId: data.id, userCode: data.user_id })
+    const token = await createSessionToken({
+      userId: data.id,
+      userCode: data.user_id,
+      epoch: data.session_epoch ?? 0,
+    })
     await setSessionCookie(token)
 
     return NextResponse.json({ success: true, userCode: data.user_id })
