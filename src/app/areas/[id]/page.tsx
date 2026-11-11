@@ -178,7 +178,9 @@ export default function AreaDetailPage({
           <div>
             <h1 className="text-xl font-bold">エリア {areaId}</h1>
             <p className="text-sm text-herb-text-secondary">
-              {plants.length}種のハーブ
+              {/* plants はこのエリアの行の数（株数）。同じ名前の株も1株ずつ数える。
+                  種数ではないので「株」と書く（B は 39株・36種） */}
+              {plants.length}株のハーブ
             </p>
           </div>
         </div>
