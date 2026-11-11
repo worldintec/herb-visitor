@@ -361,7 +361,8 @@ export default function HomePage() {
                     {area}
                   </span>
                   <p className="text-[10px] text-herb-text-secondary mt-0.5">
-                    {areaCounts[area] || 0}種
+                    {/* エリアごとの行の数（株数）。エリア詳細の見出しと同じく「株」と書く */}
+                    {areaCounts[area] || 0}株
                   </p>
                 </Link>
               ))}

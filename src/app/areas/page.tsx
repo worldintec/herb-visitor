@@ -178,7 +178,8 @@ export default function AreasPage() {
                     <div className="flex items-center gap-1.5 mt-1">
                       <Leaf size={12} className="text-green-400" />
                       <span className="text-xs text-herb-text-secondary">
-                        {count}種のハーブ
+                        {/* エリアごとの行の数（株数）。エリア詳細の見出しと同じく「株」と書く */}
+                        {count}株のハーブ
                       </span>
                     </div>
                     {cats.length > 0 && (
