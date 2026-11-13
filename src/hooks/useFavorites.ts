@@ -70,6 +70,16 @@ function toggleFavorite(plantId: PlantId) {
   emitChange()
 }
 
+// 指定した株をまとめてお気に入りから外す（同じ名前の株を全部外すときに使う）
+function removeFavorites(plantIds: PlantId[]) {
+  ensureLoaded()
+  const next = favoriteIds.filter((id) => !plantIds.includes(id))
+  if (next.length === favoriteIds.length) return
+  favoriteIds = next
+  saveToStorage()
+  emitChange()
+}
+
 /**
  * お気に入り（ハーブID）をlocalStorageで管理するフック。
  * useSyncExternalStoreによりページ内の複数コンポーネント間で状態を共有し、
@@ -87,5 +97,5 @@ export function useFavorites() {
     [favoriteIds]
   )
 
-  return { favoriteIds, isFavorite, toggleFavorite }
+  return { favoriteIds, isFavorite, toggleFavorite, removeFavorites }
 }

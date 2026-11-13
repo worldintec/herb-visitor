@@ -20,7 +20,7 @@ import {
   Lock,
   UserPlus,
 } from "lucide-react"
-import { fetchPlant, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
+import { fetchPlant, fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { sortPhotosByPriority } from "@/lib/photo-utils"
 import FavoriteButton from "@/components/favorite-button"
@@ -63,6 +63,8 @@ export default function PlantDetailPage({
   const { id } = use(params)
   const router = useRouter()
   const [plant, setPlant] = useState<Plant | null>(null)
+  // 同じ名前の株の id（ハートを一覧と同じく名前でそろえるため。取れなければこの株だけ）
+  const [sameNameIds, setSameNameIds] = useState<Plant["id"][]>([])
   const [teaser, setTeaser] = useState<TeaserPlant | null>(null)
   const [photos, setPhotos] = useState<PlantPhoto[]>([])
   const [notes, setNotes] = useState<PlantNote[]>([])
@@ -106,7 +108,7 @@ export default function PlantDetailPage({
 
         // plant_photos / plant_notes は RLS で anon を遮断しているため API 経由で読む
         const name = encodeURIComponent(plantData.name)
-        const [photoRes, noteRes] = await Promise.all([
+        const [photoRes, noteRes, allPlants] = await Promise.all([
           fetch(`/api/plant-photos?plantName=${name}`)
             .then((r) => (r.ok ? r.json() : { photos: [] }))
             .catch(() => ({ photos: [] })),
@@ -114,7 +116,11 @@ export default function PlantDetailPage({
           fetch(`/api/plant-notes?plantName=${name}&nonEmpty=1`)
             .then((r) => (r.ok ? r.json() : { notes: [] }))
             .catch(() => ({ notes: [] })),
+          fetchPlants().catch(() => null),
         ])
+        setSameNameIds(
+          allPlants ? allPlants.filter((p) => p.name === plantData.name).map((p) => p.id) : [plantData.id]
+        )
 
         if (photoRes.photos) setPhotos(sortPhotosByPriority(photoRes.photos))
         if (noteRes.notes) setNotes(noteRes.notes as PlantNote[])
@@ -391,6 +397,7 @@ export default function PlantDetailPage({
         {/* Favorite button */}
         <FavoriteButton
           plantId={plant.id}
+          groupIds={sameNameIds}
           variant="dark"
           size={20}
           className="absolute top-4 right-4"

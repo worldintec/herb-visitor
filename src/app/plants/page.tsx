@@ -123,6 +123,24 @@ export default function PlantsPage() {
     })
   }, [plants, favoritesOnly, isFavorite, selectedArea, selectedCategory, searchQuery])
 
+  // 名前ごとの株の id（ハートは名前でそろえる。favorite-button.tsx）
+  const idsByName = useMemo(() => {
+    const map = new Map<string, Plant["id"][]>()
+    for (const p of plants) {
+      const list = map.get(p.name) ?? []
+      list.push(p.id)
+      map.set(p.name, list)
+    }
+    return map
+  }, [plants])
+
+  // 上部のお気に入りの数は「名前の数」。一覧は名前ごとに1枚なので、株で数えると
+  // 「2件なのにカードが1枚」になる。読み込む前は保存されている株の数を出す
+  const favoriteNameCount = useMemo(() => {
+    if (plants.length === 0) return favoriteIds.length
+    return new Set(plants.filter((p) => isFavorite(p.id)).map((p) => p.name)).size
+  }, [plants, favoriteIds, isFavorite])
+
   const activeFilterCount =
     (selectedArea ? 1 : 0) + (selectedCategory ? 1 : 0)
 
@@ -176,7 +194,7 @@ export default function PlantsPage() {
                 size={16}
                 fill={favoritesOnly ? "currentColor" : "none"}
               />
-              {favoriteIds.length > 0 && (
+              {favoriteNameCount > 0 && (
                 <span
                   className={`rounded-full w-4 h-4 text-[10px] flex items-center justify-center font-bold ${
                     favoritesOnly
@@ -184,7 +202,7 @@ export default function PlantsPage() {
                       : "bg-rose-100 text-rose-500"
                   }`}
                 >
-                  {favoriteIds.length}
+                  {favoriteNameCount}
                 </span>
               )}
             </button>
@@ -344,6 +362,7 @@ export default function PlantsPage() {
                   </span>
                   <FavoriteButton
                     plantId={plant.id}
+                    groupIds={idsByName.get(plant.name)}
                     size={16}
                     className="absolute top-1 right-1"
                   />

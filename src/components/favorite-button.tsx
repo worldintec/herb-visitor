@@ -5,6 +5,14 @@ import { useFavorites } from "@/hooks/useFavorites"
 
 interface Props {
   plantId: string | number
+  /**
+   * 同じ名前の株の id（自分も含む）。お気に入りは保存は株ごとだが、来園者は「名前」で考えるので、
+   * ハートは名前でそろえる（C #81 の続き）。
+   *   点灯 … 同じ名前のどれか1株がお気に入りなら点灯
+   *   押す … 消えているときは表示している株を加える／点灯しているときは同じ名前の株を全部外す
+   * 渡さなければ、この株だけで判定する。
+   */
+  groupIds?: (string | number)[]
   variant?: "light" | "dark"
   size?: number
   className?: string
@@ -16,12 +24,14 @@ interface Props {
  */
 export default function FavoriteButton({
   plantId,
+  groupIds,
   variant = "light",
   size = 18,
   className = "",
 }: Props) {
-  const { isFavorite, toggleFavorite } = useFavorites()
-  const active = isFavorite(plantId)
+  const { isFavorite, toggleFavorite, removeFavorites } = useFavorites()
+  const ids = groupIds && groupIds.length > 0 ? groupIds : [plantId]
+  const active = ids.some((id) => isFavorite(id))
 
   const baseStyle =
     variant === "dark"
@@ -40,7 +50,9 @@ export default function FavoriteButton({
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
-        toggleFavorite(plantId)
+        // 点灯しているときは同じ名前の株を全部外す（表示中の株だけ外すと、ほかの株が残って消えない）
+        if (active) removeFavorites(ids)
+        else toggleFavorite(plantId)
       }}
       aria-label={active ? "お気に入りから削除" : "お気に入りに追加"}
       aria-pressed={active}
