@@ -93,18 +93,14 @@ export default function PlantsPage() {
     [plants]
   )
 
-  // 同一ハーブ名の重複を排除（複数エリアに存在する場合は最初の1件のみ）
-  const uniquePlants = useMemo(() => {
-    const seen = new Set<string>()
-    return plants.filter((p) => {
-      if (seen.has(p.name)) return false
-      seen.add(p.name)
-      return true
-    })
-  }, [plants])
-
+  // 先に全株を絞り込み、そのあとで同じ名前の株を1枚にまとめる（C #81）。
+  // 以前は全エリアでまとめてから絞り込んでいたため、まとめる段階で落ちた株は、
+  // エリア・お気に入り・分類・検索のどれで絞っても出てこなかった
+  // （例：8エリアにあるラベンダーグロッソが、エリアで絞ると1エリアでしか出ない）。
+  // 絞り込んでいないときは、いままでどおり全株を名前でまとめた一覧（見出しは名前の数＝◯種）。
+  // まとめたカードは、条件に当てはまった株のうち最初の1株（エリア順・名前順）を出す。
   const filteredPlants = useMemo(() => {
-    return uniquePlants.filter((p) => {
+    const matched = plants.filter((p) => {
       if (favoritesOnly && !isFavorite(p.id)) return false
       if (selectedArea && p.area !== selectedArea) return false
       if (selectedCategory && p.category !== selectedCategory) return false
@@ -119,7 +115,13 @@ export default function PlantsPage() {
       }
       return true
     })
-  }, [uniquePlants, favoritesOnly, isFavorite, selectedArea, selectedCategory, searchQuery])
+    const seen = new Set<string>()
+    return matched.filter((p) => {
+      if (seen.has(p.name)) return false
+      seen.add(p.name)
+      return true
+    })
+  }, [plants, favoritesOnly, isFavorite, selectedArea, selectedCategory, searchQuery])
 
   const activeFilterCount =
     (selectedArea ? 1 : 0) + (selectedCategory ? 1 : 0)

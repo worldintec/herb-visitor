@@ -157,6 +157,24 @@ export default function AreaDetailPage({
     return result
   }, [plants, positions])
 
+  // 一覧のカード。同じ名前の株は1枚にまとめ、番号はまとめた株の分をすべて出す（C #72）。
+  // 写真・園からのメモは名前ごとに共有なので、同じ名前の株は中身が同じカードになっていた。
+  // 番号を全部出すのは、配置マップの点（株ごとに1つ）と一覧の数を突き合わせられるようにするため。
+  // カードの位置と、タップしたときに開く株は、いちばん小さい番号の株（plants は番号順に読んでいる）。
+  // 見出しの「◯株のハーブ」と配置マップは、これまでどおり株ごとに数える。
+  const plantCards = useMemo(() => {
+    const byName = new Map<string, { plant: Plant; nos: number[] }>()
+    for (const plant of plants) {
+      const card = byName.get(plant.name)
+      if (card) {
+        if (plant.plant_no != null) card.nos.push(plant.plant_no)
+      } else {
+        byName.set(plant.name, { plant, nos: plant.plant_no != null ? [plant.plant_no] : [] })
+      }
+    }
+    return [...byName.values()].map((c) => ({ ...c, nos: [...c.nos].sort((a, b) => a - b) }))
+  }, [plants])
+
   const getPlantId = (name: string) => posNameToPlant.get(name)?.id
   const getPlantNo = (name: string) => posNameToPlant.get(name)?.plant_no ?? null
 
@@ -369,7 +387,7 @@ export default function AreaDetailPage({
               ハーブ一覧
             </h2>
             <div className="space-y-2">
-              {plants.map((plant) => (
+              {plantCards.map(({ plant, nos }) => (
                 <Link
                   key={plant.id}
                   href={`/plants/${plant.id}`}
@@ -389,9 +407,15 @@ export default function AreaDetailPage({
                     <h3 className="font-semibold text-sm truncate">
                       {plant.name}
                     </h3>
-                    <p className="text-xs text-herb-text-secondary truncate">
-                      {plant.category || ""}
-                      {plant.plant_no ? ` ・ No.${plant.plant_no}` : ""}
+                    {/* 分類は長ければ省略し、番号（No.3・No.4 …）は省略せずに折り返す */}
+                    <p className="text-xs text-herb-text-secondary flex flex-wrap items-baseline gap-x-1 min-w-0">
+                      {plant.category && <span className="truncate max-w-full">{plant.category}</span>}
+                      {nos.length > 0 && (
+                        <span className="break-words">
+                          {plant.category ? "・ " : ""}
+                          {nos.map((no) => `No.${no}`).join("・")}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </Link>
