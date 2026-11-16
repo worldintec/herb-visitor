@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import Link from "next/link"
-import { Search, Leaf, MapPin, Filter, Heart, X } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { Search, Leaf, MapPin, Filter, Heart, X, Sparkles } from "lucide-react"
 import { fetchPlants, PLANTS_LOAD_ERROR } from "@/lib/plants-api"
 import type { Plant, PlantPhoto } from "@/types/database"
 import { getRepresentativePhoto } from "@/lib/photo-utils"
@@ -10,8 +11,25 @@ import PlantImage from "@/components/plant-image"
 import FavoriteButton from "@/components/favorite-button"
 import { useFavorites } from "@/hooks/useFavorites"
 import { useScrollRestore } from "@/hooks/useScrollRestore"
+import { useCurrentMonth } from "@/hooks/useCurrentMonth"
+import { isRecommendedInMonth } from "@/lib/bloom-months"
 
+// 「おすすめ」の絞り込みを URL に持たせる（/plants?recommended=1）。
+// ホームの「{月}月のおすすめハーブ」の「すべて見る」がこの形で開く。月は URL に入れず、いつもいまの月
+const RECOMMENDED_PARAM = "recommended"
+
+// useSearchParams を使う画面は Suspense で囲む（Next.js の決まり）
 export default function PlantsPage() {
+  return (
+    <Suspense>
+      <PlantsContent />
+    </Suspense>
+  )
+}
+
+function PlantsContent() {
+  const searchParams = useSearchParams()
+  const currentMonth = useCurrentMonth()
   const [plants, setPlants] = useState<Plant[]>([])
   const [photos, setPhotos] = useState<Record<string, PlantPhoto>>({})
   const [loading, setLoading] = useState(true)
@@ -21,12 +39,25 @@ export default function PlantsPage() {
   const [selectedCategory, setSelectedCategory] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [favoritesOnly, setFavoritesOnly] = useState(false)
+  // その月のおすすめ（ホームと同じ判定。src/lib/bloom-months.ts）だけにする
+  const [recommendedOnly, setRecommendedOnlyState] = useState(
+    () => searchParams.get(RECOMMENDED_PARAM) === "1"
+  )
+  // 絞り込みを変えたら URL も書き換える。履歴は増やさないので、「戻る」1回でホームなど元の画面へ戻る
+  const setRecommendedOnly = (on: boolean) => {
+    setRecommendedOnlyState(on)
+    const params = new URLSearchParams(window.location.search)
+    if (on) params.set(RECOMMENDED_PARAM, "1")
+    else params.delete(RECOMMENDED_PARAM)
+    const query = params.toString()
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`)
+  }
   const { favoriteIds, isFavorite } = useFavorites()
 
   // 植物ページから「戻る」で戻ったとき、スクロール位置と絞り込みを元に戻す
   const listState = useMemo(
-    () => ({ searchQuery, selectedArea, selectedCategory, favoritesOnly, showFilters }),
-    [searchQuery, selectedArea, selectedCategory, favoritesOnly, showFilters]
+    () => ({ searchQuery, selectedArea, selectedCategory, favoritesOnly, recommendedOnly, showFilters }),
+    [searchQuery, selectedArea, selectedCategory, favoritesOnly, recommendedOnly, showFilters]
   )
   useScrollRestore("plants", !loading, {
     extra: listState,
@@ -35,6 +66,7 @@ export default function PlantsPage() {
       setSelectedArea(s.selectedArea)
       setSelectedCategory(s.selectedCategory)
       setFavoritesOnly(s.favoritesOnly)
+      setRecommendedOnly(s.recommendedOnly ?? false)
       setShowFilters(s.showFilters)
     },
   })
@@ -101,6 +133,7 @@ export default function PlantsPage() {
   // まとめたカードは、条件に当てはまった株のうち最初の1株（エリア順・名前順）を出す。
   const filteredPlants = useMemo(() => {
     const matched = plants.filter((p) => {
+      if (recommendedOnly && !isRecommendedInMonth(p, currentMonth)) return false
       if (favoritesOnly && !isFavorite(p.id)) return false
       if (selectedArea && p.area !== selectedArea) return false
       if (selectedCategory && p.category !== selectedCategory) return false
@@ -121,7 +154,7 @@ export default function PlantsPage() {
       seen.add(p.name)
       return true
     })
-  }, [plants, favoritesOnly, isFavorite, selectedArea, selectedCategory, searchQuery])
+  }, [plants, recommendedOnly, currentMonth, favoritesOnly, isFavorite, selectedArea, selectedCategory, searchQuery])
 
   // 名前ごとの株の id（ハートは名前でそろえる。favorite-button.tsx）
   const idsByName = useMemo(() => {
@@ -142,7 +175,7 @@ export default function PlantsPage() {
   }, [plants, favoriteIds, isFavorite])
 
   const activeFilterCount =
-    (selectedArea ? 1 : 0) + (selectedCategory ? 1 : 0)
+    (recommendedOnly ? 1 : 0) + (selectedArea ? 1 : 0) + (selectedCategory ? 1 : 0)
 
   return (
     <div className="min-h-dvh">
@@ -213,6 +246,25 @@ export default function PlantsPage() {
             <div className="mt-3 space-y-2">
               <div>
                 <label className="text-xs font-medium text-herb-text-secondary mb-1 block">
+                  おすすめ
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setRecommendedOnly(!recommendedOnly)}
+                    aria-pressed={recommendedOnly}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1 ${
+                      recommendedOnly
+                        ? "bg-herb-primary text-white"
+                        : "bg-white text-herb-text-secondary border border-herb-border"
+                    }`}
+                  >
+                    <Sparkles size={12} />
+                    {currentMonth}月のおすすめハーブ
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-herb-text-secondary mb-1 block">
                   エリア
                 </label>
                 <div className="flex flex-wrap gap-1.5">
@@ -280,6 +332,7 @@ export default function PlantsPage() {
               {activeFilterCount > 0 && (
                 <button
                   onClick={() => {
+                    setRecommendedOnly(false)
                     setSelectedArea("")
                     setSelectedCategory("")
                   }}
@@ -295,7 +348,20 @@ export default function PlantsPage() {
       </div>
 
       {/* Results count */}
-      <div className="px-4 py-2">
+      {/* おすすめで絞っているあいだは、件数の左に外せる札を出す。ホームの「すべて見る」から来た人にも、
+          一覧が少ない理由（おすすめだけを出している）が分かるように */}
+      <div className="px-4 py-2 flex items-center gap-2 flex-wrap">
+        {recommendedOnly && (
+          <button
+            onClick={() => setRecommendedOnly(false)}
+            aria-label={`${currentMonth}月のおすすめハーブの絞り込みを外す`}
+            className="inline-flex items-center gap-1 rounded-full bg-herb-primary/10 border border-herb-primary/30 px-2.5 py-1 text-xs font-medium text-herb-primary"
+          >
+            <Sparkles size={12} />
+            {currentMonth}月のおすすめハーブ
+            <X size={12} />
+          </button>
+        )}
         <p className="text-xs text-herb-text-secondary">
           {filteredPlants.length}種のハーブ
         </p>
