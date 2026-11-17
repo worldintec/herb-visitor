@@ -9,9 +9,11 @@ import { ArrowLeft, KeyRound, MapPin, Clock, UserPlus, AlertTriangle } from "luc
 // パスワードは窓口で仮パスワードを発行できる（api/staff/issue-temp-password）。
 // IDは職員の側からも調べる手段が無いので、あらためて登録してもらうしかない。
 //
-// 窓口では、来園者が告げたIDがその人のものかを確かめる手段が無い
-// （本アプリは氏名も連絡先も記録していない）。それでも窓口発行とするのは
-// 運用上の判断なので、ここの文言を変えるときは必ず確認すること。
+// 本アプリは氏名も連絡先も記録していないので、告げられたIDがその人のものかは、アプリでは確かめられない。
+// そのため窓口で、職員がご本人であることを確かめてから発行する（利用規約 第3条5項。2026年11月の第4版）。
+//   ・お顔を存じ上げている方は、それで差し支えない
+//   ・存じ上げない方には、身分証明書などのご提示をお願いする
+// 確かめ方は運用の判断で、アプリには仕組みを持たない。ここの文言を変えるときは必ず確認すること。
 //
 // 同じ内容が src/data/guide.ts の account 節と src/app/login/page.tsx にもある。
 export default function ForgotPasswordPage() {
@@ -45,7 +47,10 @@ export default function ForgotPasswordPage() {
             <strong>見沼氷川公園の窓口</strong>で再発行できます。ご来園のうえ、職員に<strong>会員ID</strong>をお伝えください。
           </p>
           <p className="text-sm text-herb-text leading-relaxed">
-            職員が仮パスワードを発行します。その仮パスワードでログインしたあと、新しいパスワードへの変更をお願いします（変更が完了するまで、ほかの画面はご利用いただけません）。
+            窓口でご本人であることを確認させていただきます。お顔を存じ上げない場合は、<strong>身分証明書など</strong>のご提示をお願いすることがあります。
+          </p>
+          <p className="text-sm text-herb-text leading-relaxed">
+            確認ができましたら、職員が仮パスワードを発行します。その仮パスワードでログインしたあと、新しいパスワードへの変更をお願いします（変更が完了するまで、ほかの画面はご利用いただけません）。
           </p>
 
           <div className="border-t border-herb-border pt-3 space-y-3">
