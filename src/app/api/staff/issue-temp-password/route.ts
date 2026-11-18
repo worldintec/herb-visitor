@@ -3,7 +3,6 @@ import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { randomInt } from "crypto"
 import { getStaffSession } from "@/lib/staff-auth"
-import { setUserPassword } from "@/lib/user-password"
 import { rememberSessionEpoch } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
@@ -14,6 +13,10 @@ function getSupabase() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 }
+
+const SUSPENDED_ERROR = "停止中の会員には発行できません。先に解除してください。"
+const SUSPENDED_OR_GONE_ERROR =
+  "発行できませんでした。停止中か、退会した会員です。停止中なら、先に解除してください。"
 
 const TEMP_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
 
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     const { data: user } = await supabase
       .from("users")
-      .select("id, user_id")
+      .select("id, user_id, suspended_at")
       .eq("id", targetUserId)
       .maybeSingle()
 
@@ -48,22 +51,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "対象ユーザーが見つかりません" }, { status: 404 })
     }
 
+    if (user.suspended_at) {
+      return NextResponse.json({ error: SUSPENDED_ERROR }, { status: 409 })
+    }
+
     const tempPassword = generateTempPassword(9)
     const passwordHash = await bcrypt.hash(tempPassword, 10)
 
-    // 書き換えと同時にログインの世代を進める。乗っ取られた方を職員が助けるとき、
-    // ほかの端末（乗っ取った側）のログインもここで切れる（B-1 #10）。0行なら成功を返さない（#12）
-    const result = await setUserPassword(user.id, passwordHash, true)
-    if (!result.ok) {
-      console.error(`[staff/issue-temp-password] 書き換えに失敗しました reason=${result.reason}`, result.detail)
+    // データベースの関数 issue_temp_password が1回で、パスワードの書き換え・変更待ちの印・
+    // 期限（7日）・ログインの世代を進める（ほかの端末が切れる。B-1 #10）・発行の記録、を行う。
+    // 職員アプリ（herb-garden）の「会員の管理」も同じ関数を呼ぶので、2つの画面で決まりがずれない（B-5 #89）。
+    // 停止中・行が無いときは null が返る。成功として扱わない（#12）
+    const { data: epoch, error: rpcError } = await supabase.rpc("issue_temp_password", {
+      p_user_id: user.id,
+      p_password_hash: passwordHash,
+      p_staff_id: staffSession.staffId,
+    })
+    if (rpcError) {
+      console.error("[staff/issue-temp-password] 発行に失敗しました", rpcError)
       return NextResponse.json({ error: "仮パスワードの発行に失敗しました" }, { status: 500 })
     }
-    rememberSessionEpoch(user.id, result.epoch)
-
-    await supabase.from("password_reset_logs").insert({
-      target_user_id: user.id,
-      staff_id: staffSession.staffId,
-    })
+    if (typeof epoch !== "number") {
+      // 調べたあとに停止された・退会したなど
+      return NextResponse.json({ error: SUSPENDED_OR_GONE_ERROR }, { status: 409 })
+    }
+    rememberSessionEpoch(user.id, epoch)
 
     return NextResponse.json({ success: true, tempPassword, userCode: user.user_id })
   } catch {
