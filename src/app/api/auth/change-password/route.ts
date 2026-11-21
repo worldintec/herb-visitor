@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs"
 import { getSession, PW_PATTERN, createSessionToken, setSessionCookie, rememberSessionEpoch } from "@/lib/auth"
 import { getSupabaseAdmin } from "@/lib/supabase-admin"
 import { setUserPassword } from "@/lib/user-password"
+import { RATE_LIMITS, RATE_LIMIT_MESSAGES, hitLimit, isOverLimit, rateKey } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -43,6 +44,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "パスワードは英数字8〜16文字で入力してください" }, { status: 400 })
   }
 
+  // 回数制限（C #83）。いまのパスワードを15分に10回間違えたら、しばらく受け付けない。ログインした本人の口なので IP は使わない
+  const pwKey = rateKey("pwchange:user", "pwchange-user", session.userId)
+  if (await isOverLimit(pwKey, RATE_LIMITS.pwChangePerUser)) {
+    return NextResponse.json({ error: RATE_LIMIT_MESSAGES.pwChange, code: "rate_limited" }, { status: 429 })
+  }
+
   try {
     // いまのパスワードを照合する
     const { data: user, error: readError } = await getSupabaseAdmin()
@@ -60,6 +67,7 @@ export async function POST(request: NextRequest) {
     }
     const ok = await bcrypt.compare(currentPassword, user.password_hash as string)
     if (!ok) {
+      await hitLimit(pwKey, RATE_LIMITS.pwChangePerUser)
       return NextResponse.json({ error: WRONG_CURRENT, code: "wrong_current_password" }, { status: 400 })
     }
 

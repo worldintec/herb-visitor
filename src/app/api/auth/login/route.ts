@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { createSessionToken, setSessionCookie, ID_PATTERN, PW_PATTERN } from "@/lib/auth"
+import { RATE_LIMITS, RATE_LIMIT_MESSAGES, anyOverLimit, clientIp, hitAll, rateKey } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
 // JIT warmup: bcryptjs は初回呼び出し時に V8 コンパイルが走り遅延するため
 // モジュールロード時に低コストで一度実行してキャッシュさせる
 bcrypt.hashSync("__warmup__", 1)
+
+// ID が存在しないときも、これと照合して返事の時間をそろえる（C #83）。
+// 照合を飛ばすと返事が速く返り、時間を測れば ID があるかが分かってしまう。強さは本物と同じ 10
+const DUMMY_HASH = bcrypt.hashSync("dummy-password-for-timing", 10)
 
 // 停止中・期限切れの文言は、パスワードが合っていたときだけ出す（B-5 #87・#88）。
 // 合っていないときは、ふつうの誤りと同じ文言にして、停止や仮パスワードの有無が漏れないようにする
@@ -32,6 +37,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "IDまたはパスワードが正しくありません" }, { status: 401 })
     }
 
+    // 回数制限（C #83）。ID を探す前に見るので、ID があってもなくても同じ数え方・同じ文言になる
+    const ip = clientIp(request)
+    const keys = {
+      idip: rateKey("login:idip", "login-idip", `${userId}|${ip}`),
+      id: rateKey("login:id", "login-id", userId),
+      ip: rateKey("login:ip", "login-ip", ip),
+    }
+    if (
+      await anyOverLimit([
+        [keys.idip, RATE_LIMITS.loginPerIdIp],
+        [keys.id, RATE_LIMITS.loginPerId],
+        [keys.ip, RATE_LIMITS.loginPerIp],
+      ])
+    ) {
+      return NextResponse.json({ error: RATE_LIMIT_MESSAGES.login, code: "rate_limited" }, { status: 429 })
+    }
+    const fail = async () => {
+      await hitAll([
+        [keys.idip, RATE_LIMITS.loginPerIdIp],
+        [keys.id, RATE_LIMITS.loginPerId],
+        [keys.ip, RATE_LIMITS.loginPerIp],
+      ])
+      return NextResponse.json({ error: "IDまたはパスワードが正しくありません" }, { status: 401 })
+    }
+
     const { data: user } = await supabase
       .from("users")
       .select("id, user_id, password_hash, password_reset_required, session_epoch, suspended_at, temp_password_expires_at")
@@ -39,12 +69,13 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (!user) {
-      return NextResponse.json({ error: "IDまたはパスワードが正しくありません" }, { status: 401 })
+      await bcrypt.compare(password, DUMMY_HASH)
+      return fail()
     }
 
     const ok = await bcrypt.compare(password, user.password_hash)
     if (!ok) {
-      return NextResponse.json({ error: "IDまたはパスワードが正しくありません" }, { status: 401 })
+      return fail()
     }
 
     // 職員が利用を停止した会員（職員アプリの「会員の管理」）。停止は期限切れより先に見る

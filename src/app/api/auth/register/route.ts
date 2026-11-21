@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js"
 import bcrypt from "bcryptjs"
 import { createSessionToken, setSessionCookie, ID_PATTERN, PW_PATTERN } from "@/lib/auth"
 import { TERMS_VERSION } from "@/lib/terms"
+import { RATE_LIMITS, RATE_LIMIT_MESSAGES, clientIp, hitLimit, isOverLimit, rateKey, todayInJapan } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -26,6 +27,17 @@ export async function POST(request: NextRequest) {
     }
     if (tosAgreed !== true) {
       return NextResponse.json({ error: "利用規約への同意が必要です" }, { status: 400 })
+    }
+
+    // 回数制限（C #83）。その日の登録の成功数（全体で1日150件）と、同じ IP からの試み（1時間に120回。
+    // ID の重複で断られた試みも数える）。ID を探す前に見るので、ID があるかで返事は変わらない
+    const dailyKey = `register:daily:${todayInJapan()}`
+    if (await isOverLimit(dailyKey, RATE_LIMITS.registerDaily)) {
+      return NextResponse.json({ error: RATE_LIMIT_MESSAGES.register, code: "rate_limited" }, { status: 429 })
+    }
+    const ipCount = await hitLimit(rateKey("register:ip", "register-ip", clientIp(request)), RATE_LIMITS.registerPerIp)
+    if (ipCount > RATE_LIMITS.registerPerIp.limit) {
+      return NextResponse.json({ error: RATE_LIMIT_MESSAGES.register, code: "rate_limited" }, { status: 429 })
     }
 
     // 既存ID重複チェック。
@@ -64,6 +76,9 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
+
+    // 登録できたら、その日の成功数を1つ足す（IP も ID も入らない key。こちらが SQL で見られる）
+    await hitLimit(dailyKey, RATE_LIMITS.registerDaily)
 
     const token = await createSessionToken({
       userId: data.id,
